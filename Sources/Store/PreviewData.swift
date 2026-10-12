@@ -2,34 +2,87 @@ import Foundation
 
 public enum PreviewData {
     public static let defaultState = DashboardState(
-        heroTitle: "Deep Bathroom\nSanitize",
-        heroSubtitle: "Est: 35 min · Descaling + Mechanical Grout Clean",
-        heroTools: "TOOLS: Enzymatic agent, stiff bristle brush, microfiber cloths.",
-        heroTasks: [
-            ChoreItem(title: "Descale showerhead & clean door track", durationMinutes: 10, tag: "10m"),
-            ChoreItem(title: "Disinfect toilet base, bowl & seals", durationMinutes: 10, tag: "10m"),
-            ChoreItem(title: "Pull hair trap & flush drain with enzyme", durationMinutes: 5, tag: "05m"),
-            ChoreItem(title: "Damp mop floor tiles to baseboard", durationMinutes: 10, tag: "10m")
+        focusOverline: "KITCHEN & BREWING",
+        focusTitle: "Kitchen Deep Clean & Kombucha",
+        focusSubtitle: "Sanitation · Bottle prep · Fermentation",
+        heroTools: "TOOLS: Food-safe sanitizer, microfiber cloths, bottle brush.",
+        focusJobs: [
+            FocusJob(
+                tag: "COUNTERS",
+                title: "Deep clean countertops",
+                notes: "Clear surfaces and wipe with sanitizer."
+            ),
+            FocusJob(
+                tag: "FLOORS",
+                title: "Scrub floors & crevices",
+                notes: ""
+            ),
+            FocusJob(
+                tag: "FRIDGE",
+                title: "Deep clean refrigerator",
+                notes: "Purge expired items; wipe shelves and door seals."
+            ),
+            FocusJob(
+                tag: "BOTTLES",
+                title: "Wash kombucha bottles",
+                notes: ""
+            ),
+            FocusJob(
+                tag: "KOMBUCHA",
+                title: "Prep kombucha batch",
+                notes: "Brew sweet tea base and pitch starter culture."
+            ),
+            FocusJob(
+                tag: "SINK",
+                title: "Sanitize sink & drain",
+                notes: ""
+            )
         ],
+        baselineTitle: "Daily Baseline",
+        baselineSubtitle: "Est: 25 min · Daily maintenance",
+        baselineRule: "RULE: Complete before noon.",
         baselineTasks: [
-            ChoreItem(title: "Sink empty & prep counters sanitized", durationMinutes: 3, tag: "Kitchen"),
-            ChoreItem(title: "Stovetop wiped clean of oil spatter", durationMinutes: 3, tag: "Kitchen"),
-            ChoreItem(title: "Squeegee shower walls & hang towels", durationMinutes: 2, tag: "Bathroom"),
-            ChoreItem(title: "Wet waste / compost to exterior bin", durationMinutes: 2, tag: "General"),
-            ChoreItem(title: "Clear active desk & flat work surfaces", durationMinutes: 5, tag: "Living")
+            ChoreItem(title: "Stretch", durationMinutes: 10, tag: "Body"),
+            ChoreItem(title: "13-minute meditation", durationMinutes: 13, tag: "Mind"),
+            ChoreItem(title: "Wash dishes", durationMinutes: 8, tag: "Kitchen")
         ],
         upcomingEvents: [
-            HorizonEvent(tag: "Tomorrow · Tue, Oct 13", title: "Range Hood Degreasing & Stovetop", notes: "Soak mesh filters overnight; wipe cooktop backsplash.", timeAnchor: "Tomorrow"),
-            HorizonEvent(tag: "Appointment · Thu, Oct 15", title: "Dentist: Exam & Prophylaxis Cleaning", notes: "Dr. Marcus, Midtown Dental · Suite 400.", timeAnchor: "09:30 AM"),
-            HorizonEvent(tag: "Deep Clean · Sat, Oct 17", title: "Oven Interior & Racks (Steam Cycle)", notes: "Apply baking soda paste; wipe late afternoon. Heavy fumes.", timeAnchor: "Saturday"),
-            HorizonEvent(tag: "Appliance · Sat, Oct 24", title: "Pull Refrigerator & Clean Coils", notes: "Vacuum rear condenser coils, clean floor under.", timeAnchor: "In 12 Days"),
-            HorizonEvent(tag: "Facilities · Sun, Nov 01", title: "Replace HVAC Intake Filter (MERV 11)", notes: "Standard 30-day replacement. 2 backups in storage.", timeAnchor: "In 20 Days")
+            HorizonEvent(
+                tag: "Plants · Thu, Oct 15",
+                title: "Water flowers",
+                notes: "Check soil and water indoor pots.",
+                timeAnchor: "In 2 Days"
+            ),
+            HorizonEvent(
+                tag: "Waste · Fri, Oct 16",
+                title: "Kitchen trash",
+                notes: "Empty can and replace liner.",
+                timeAnchor: "In 3 Days"
+            ),
+            HorizonEvent(
+                tag: "Floors · Wed, Oct 25",
+                title: "Basic vacuuming",
+                notes: "Vacuum living room and main walkways.",
+                timeAnchor: "In 12 Days"
+            ),
+            HorizonEvent(
+                tag: "Storage · Sun, Nov 10",
+                title: "Tidy up boxes",
+                notes: "Break down cardboard and recycle.",
+                timeAnchor: "In 28 Days"
+            ),
+            HorizonEvent(
+                tag: "Bath · Sun, Nov 10",
+                title: "Clean bathtub",
+                notes: "Scrub tub basin and wipe fixtures.",
+                timeAnchor: "In 28 Days"
+            )
         ],
         telemetryMetrics: [
-            TelemetryMetric(label: "HVAC intake", status: "24 / 30d"),
-            TelemetryMetric(label: "Bed linens", status: "Due Wed"),
-            TelemetryMetric(label: "Degreaser", status: "Low (Order)"),
-            TelemetryMetric(label: "Dish tabs", status: "14 loads")
+            TelemetryMetric(label: "Kombucha", status: "Day 6 / 10"),
+            TelemetryMetric(label: "Flowers", status: "Moist"),
+            TelemetryMetric(label: "Dishes", status: "Clear"),
+            TelemetryMetric(label: "Trash bags", status: "6 left")
         ]
     )
 }
