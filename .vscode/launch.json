@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:ChoreDashboard}",
+            "name": "Debug ChoreDashboard",
+            "target": "ChoreDashboard",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug ChoreDashboard"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:ChoreDashboard}",
+            "name": "Release ChoreDashboard",
+            "target": "ChoreDashboard",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release ChoreDashboard"
+        }
+    ]
+}

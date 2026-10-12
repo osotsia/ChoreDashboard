@@ -1,0 +1,55 @@
+plan/
+# ==============================================================================
+# Swift Package Manager (Build Artifacts)
+# ==============================================================================
+.build/
+Packages/
+*.dSYM/
+
+# ==============================================================================
+# Custom Build & Distribution Artifacts (compile.sh outputs)
+# ==============================================================================
+dist/
+*.app/
+*.zip
+
+# ==============================================================================
+# Xcode & Apple Developer Metadata
+# ==============================================================================
+# Generated if the project folder is ever opened in Xcode
+DerivedData/
+*.xcuserdatad/
+xcuserdata/
+*.xcuserstate
+*.xcbkptlist
+
+# ==============================================================================
+# VS Code Configuration
+# ==============================================================================
+# Ignore user-specific workspace state, but preserve shared tasks/launch configs
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# ==============================================================================
+# macOS System Files
+# ==============================================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.fseventsd
+
+# ==============================================================================
+# Local Environment & Logs
+# ==============================================================================
+*.log
+.env
+.env.local
