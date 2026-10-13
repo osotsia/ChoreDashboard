@@ -62,6 +62,7 @@ public struct PrimaryFocusView: View {
         }
         .padding(24 * s)
         .foregroundColor(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppConfig.Colors.blockBlack)
     }
 }

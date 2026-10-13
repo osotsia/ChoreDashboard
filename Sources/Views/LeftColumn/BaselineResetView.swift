@@ -4,6 +4,19 @@ public struct BaselineResetView: View {
     public var store: DashboardStore
     @Environment(\.scaleFactor) private var s
 
+    private var taskList: some View {
+        VStack(spacing: 10 * s) {
+            ForEach(store.state.baselineTasks) { item in
+                CheckboxRow(
+                    title: item.title,
+                    tag: item.tag,
+                    isCompleted: item.isCompleted,
+                    onToggle: { store.toggleBaselineTask(id: item.id) }
+                )
+            }
+        }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -32,18 +45,13 @@ public struct BaselineResetView: View {
                 .foregroundColor(.white.opacity(0.8))
                 .padding(.bottom, 14 * s)
 
-            VStack(spacing: 10 * s) {
-                ForEach(store.state.baselineTasks) { item in
-                    CheckboxRow(
-                        title: item.title,
-                        tag: item.tag,
-                        isCompleted: item.isCompleted,
-                        onToggle: { store.toggleBaselineTask(id: item.id) }
-                    )
+            ViewThatFits(in: .vertical) {
+                taskList
+                ScrollView(.vertical, showsIndicators: false) {
+                    taskList
                 }
             }
-
-            Spacer(minLength: 10 * s)
+            .padding(.bottom, 14 * s)
 
             Rectangle()
                 .fill(Color.white.opacity(0.3))
@@ -56,6 +64,7 @@ public struct BaselineResetView: View {
         }
         .padding(28 * s)
         .foregroundColor(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppConfig.Colors.blockSlate)
     }
 }
