@@ -2,15 +2,15 @@ import Foundation
 
 public enum PreviewData {
     public static let defaultState = DashboardState(
-        focusOverline: "KITCHEN & BREWING",
-        focusTitle: "Kitchen Deep Clean & Kombucha",
-        focusSubtitle: "Sanitation · Bottle prep · Fermentation",
-        heroTools: "TOOLS: Food-safe sanitizer, microfiber cloths, bottle brush.",
+        focusOverline: "SCHEDULED OPERATIONS",
+        focusTitle: "Main Tasks",
+        focusSubtitle: "Targeted deep maintenance · Non-routine upkeep",
+        heroTools: "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit.",
         focusJobs: [
             FocusJob(
-                tag: "COUNTERS",
+                tag: "KITCHEN",
                 title: "Deep clean countertops",
-                notes: "Clear surfaces and wipe with sanitizer."
+                notes: "Clear surfaces and wipe with food-safe sanitizer."
             ),
             FocusJob(
                 tag: "FLOORS",
@@ -18,22 +18,22 @@ public enum PreviewData {
                 notes: ""
             ),
             FocusJob(
-                tag: "FRIDGE",
+                tag: "APPLIANCE",
                 title: "Deep clean refrigerator",
                 notes: "Purge expired items; wipe shelves and door seals."
             ),
             FocusJob(
-                tag: "BOTTLES",
+                tag: "PANTRY",
                 title: "Wash kombucha bottles",
                 notes: ""
             ),
             FocusJob(
-                tag: "KOMBUCHA",
+                tag: "BREWING",
                 title: "Prep kombucha batch",
                 notes: "Brew sweet tea base and pitch starter culture."
             ),
             FocusJob(
-                tag: "SINK",
+                tag: "PLUMBING",
                 title: "Sanitize sink & drain",
                 notes: ""
             )
@@ -78,11 +78,6 @@ public enum PreviewData {
                 timeAnchor: "In 28 Days"
             )
         ],
-        telemetryMetrics: [
-            TelemetryMetric(label: "Kombucha", status: "Day 6 / 10"),
-            TelemetryMetric(label: "Flowers", status: "Moist"),
-            TelemetryMetric(label: "Dishes", status: "Clear"),
-            TelemetryMetric(label: "Trash bags", status: "6 left")
-        ]
+        telemetryMetrics: []
     )
 }

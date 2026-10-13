@@ -15,16 +15,16 @@ public struct DashboardState: Codable {
 
     public init(
         focusOverline: String = "SCHEDULED OPERATIONS",
-        focusTitle: String = "Targeted Deep Maintenance",
-        focusSubtitle: String = "Non-routine interventions · Mechanical upkeep & hygiene restoration",
-        heroTools: String,
+        focusTitle: String = "Main Tasks",
+        focusSubtitle: String = "Targeted deep maintenance · Non-routine upkeep",
+        heroTools: String = "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit.",
         focusJobs: [FocusJob],
-        baselineTitle: String = "Zero-State Daily Reset",
-        baselineSubtitle: String = "Est: 15 min · Maintain apartment entropy floor",
-        baselineRule: String = "RULE: Zero soiled dishes or wet trash past 22:00.",
+        baselineTitle: String = "Daily Baseline",
+        baselineSubtitle: String = "Est: 25 min · Daily maintenance",
+        baselineRule: String = "RULE: Complete before noon.",
         baselineTasks: [ChoreItem],
         upcomingEvents: [HorizonEvent],
-        telemetryMetrics: [TelemetryMetric]
+        telemetryMetrics: [TelemetryMetric] = []
     ) {
         self.focusOverline = focusOverline
         self.focusTitle = focusTitle
@@ -53,51 +53,46 @@ public struct DashboardState: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        // Overline resolution
+        // Generalize overline
         if let decodedOverline = try container.decodeIfPresent(String.self, forKey: .focusOverline) {
-            self.focusOverline = decodedOverline
-        } else if let legacyZone = try container.decodeIfPresent(String.self, forKey: .zoneLabel) {
-            self.focusOverline = (legacyZone.hasPrefix("ZONE") || legacyZone == "MAIN TASKS") ? "SCHEDULED OPERATIONS" : legacyZone
+            self.focusOverline = (decodedOverline.contains("KITCHEN") || decodedOverline.contains("ZONE")) ? "SCHEDULED OPERATIONS" : decodedOverline
         } else {
             self.focusOverline = "SCHEDULED OPERATIONS"
         }
 
-        // Primary Title resolution
+        // Generalize primary title to "Main Tasks"
         if let decodedTitle = try container.decodeIfPresent(String.self, forKey: .focusTitle), !decodedTitle.isEmpty {
-            self.focusTitle = decodedTitle
-        } else if let legacyHeroTitle = try container.decodeIfPresent(String.self, forKey: .heroTitle), !legacyHeroTitle.isEmpty {
-            self.focusTitle = legacyHeroTitle
+            let lower = decodedTitle.lowercased()
+            if lower.contains("kitchen") || lower.contains("bathroom") || lower.contains("targeted") {
+                self.focusTitle = "Main Tasks"
+            } else {
+                self.focusTitle = decodedTitle
+            }
         } else {
-            self.focusTitle = "Targeted Deep Maintenance"
+            self.focusTitle = "Main Tasks"
         }
 
-        // Subtitle resolution
+        // Generalize subtitle
         if let decodedSub = try container.decodeIfPresent(String.self, forKey: .focusSubtitle), !decodedSub.isEmpty {
-            self.focusSubtitle = decodedSub
-        } else if let legacyHeroSub = try container.decodeIfPresent(String.self, forKey: .heroSubtitle), !legacyHeroSub.isEmpty {
-            self.focusSubtitle = legacyHeroSub
+            let lower = decodedSub.lowercased()
+            if lower.contains("bottle") || lower.contains("descaling") {
+                self.focusSubtitle = "Targeted deep maintenance · Non-routine upkeep"
+            } else {
+                self.focusSubtitle = decodedSub
+            }
         } else {
-            self.focusSubtitle = "Non-routine interventions · Mechanical upkeep & hygiene restoration"
+            self.focusSubtitle = "Targeted deep maintenance · Non-routine upkeep"
         }
 
-        self.heroTools = try container.decode(String.self, forKey: .heroTools)
+        self.heroTools = try container.decodeIfPresent(String.self, forKey: .heroTools) ?? "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit."
 
         if let rawJobs = try container.decodeIfPresent([FocusJob].self, forKey: .focusJobs), !rawJobs.isEmpty {
-            self.focusJobs = rawJobs.map { job in
-                var cleaned = job
-                if cleaned.tag == "TASK" || cleaned.tag.hasSuffix("m") {
-                    cleaned.tag = Self.inferOperationalTag(for: cleaned.title)
-                }
-                if cleaned.notes.lowercased().hasPrefix("target:") || cleaned.notes.contains("10m") {
-                    cleaned.notes = ""
-                }
-                return cleaned
-            }
+            self.focusJobs = rawJobs
         } else if let legacyHeroTasks = try container.decodeIfPresent([ChoreItem].self, forKey: .heroTasks) {
             self.focusJobs = legacyHeroTasks.map {
                 FocusJob(
                     id: $0.id,
-                    tag: Self.inferOperationalTag(for: $0.title),
+                    tag: "TASK",
                     title: $0.title,
                     notes: ""
                 )
@@ -106,12 +101,12 @@ public struct DashboardState: Codable {
             self.focusJobs = []
         }
 
-        self.baselineTitle = try container.decodeIfPresent(String.self, forKey: .baselineTitle) ?? "Zero-State Daily Reset"
-        self.baselineSubtitle = try container.decodeIfPresent(String.self, forKey: .baselineSubtitle) ?? "Est: 15 min · Maintain apartment entropy floor"
-        self.baselineRule = try container.decodeIfPresent(String.self, forKey: .baselineRule) ?? "RULE: Zero soiled dishes or wet trash past 22:00."
+        self.baselineTitle = try container.decodeIfPresent(String.self, forKey: .baselineTitle) ?? "Daily Baseline"
+        self.baselineSubtitle = try container.decodeIfPresent(String.self, forKey: .baselineSubtitle) ?? "Est: 25 min · Daily maintenance"
+        self.baselineRule = try container.decodeIfPresent(String.self, forKey: .baselineRule) ?? "RULE: Complete before noon."
         self.baselineTasks = try container.decode([ChoreItem].self, forKey: .baselineTasks)
         self.upcomingEvents = try container.decode([HorizonEvent].self, forKey: .upcomingEvents)
-        self.telemetryMetrics = try container.decode([TelemetryMetric].self, forKey: .telemetryMetrics)
+        self.telemetryMetrics = try container.decodeIfPresent([TelemetryMetric].self, forKey: .telemetryMetrics) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -127,16 +122,5 @@ public struct DashboardState: Codable {
         try container.encode(baselineTasks, forKey: .baselineTasks)
         try container.encode(upcomingEvents, forKey: .upcomingEvents)
         try container.encode(telemetryMetrics, forKey: .telemetryMetrics)
-    }
-
-    private static func inferOperationalTag(for title: String) -> String {
-        let text = title.lowercased()
-        if text.contains("shower") || text.contains("descale") { return "PLUMBING · FIXTURES" }
-        if text.contains("toilet") || text.contains("bowl") { return "SANITATION · PORCELAIN" }
-        if text.contains("drain") || text.contains("trap") { return "DRAINAGE · ENZYMES" }
-        if text.contains("mop") || text.contains("floor") { return "SURFACES · MECHANICAL" }
-        if text.contains("fan") || text.contains("blower") { return "VENTILATION · AIRWAY" }
-        if text.contains("filter") || text.contains("hood") { return "MECHANICAL · FILTRATION" }
-        return "MAIN OPERATIONS"
     }
 }
