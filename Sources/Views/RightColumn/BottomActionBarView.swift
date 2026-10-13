@@ -57,19 +57,28 @@ public struct BottomActionBarView: View {
             }
             .buttonStyle(TactileButtonStyle())
 
-            // Button 3: Backlog (Tray Icon)
+            // Button 3: Backlog / Upcoming Toggle
             Button(action: {
-                // Hook for opening backlog repository
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    store.toggleBacklog()
+                }
             }) {
-                VStack(spacing: 3 * s) {
-                    Image(systemName: "tray.full")
-                        .font(.system(size: 14 * s, weight: .bold))
+                VStack(spacing: 2 * s) {
+                    Image(systemName: store.isShowingBacklog ? "calendar" : "tray.full")
+                        .font(.system(size: 12 * s, weight: .bold))
                         .foregroundColor(.black)
 
-                    Text("BACKLOG")
-                        .font(.system(size: 9 * s, weight: .bold))
-                        .tracking(1.2 * s)
-                        .foregroundColor(.black)
+                    VStack(spacing: 1 * s) {
+                        Text("SWITCH TO")
+                            .font(.system(size: 8 * s, weight: .bold))
+                            .tracking(1.0 * s)
+                            .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                        Text(store.isShowingBacklog ? "UPCOMING" : "BACKLOG")
+                            .font(.system(size: 9 * s, weight: .bold))
+                            .tracking(1.2 * s)
+                            .foregroundColor(.black)
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 50 * s)

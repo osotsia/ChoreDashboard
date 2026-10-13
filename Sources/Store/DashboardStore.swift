@@ -39,6 +39,7 @@ private final class DirectoryWatcher: @unchecked Sendable {
 @MainActor
 public final class DashboardStore {
     public var state: DashboardState
+    public var isShowingBacklog: Bool = false
 
     private var watcher: DirectoryWatcher?
     private var isInternalWrite: Bool = false
@@ -75,6 +76,10 @@ public final class DashboardStore {
             state.baselineTasks[idx].isCompleted = false
         }
         persist()
+    }
+
+    public func toggleBacklog() {
+        isShowingBacklog.toggle()
     }
 
     public func reloadFromDisk() {

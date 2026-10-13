@@ -41,6 +41,10 @@ private struct LeftColumnAdaptiveLayout: Layout {
 public struct DashboardView: View {
     @Bindable public var store: DashboardStore
 
+    private var totalBacklogCount: Int {
+        store.state.focusJobs.count + store.state.upcomingEvents.count + store.state.baselineTasks.count
+    }
+
     public var body: some View {
         GeometryReader { geometry in
             let scalar = max(1.0, geometry.size.width / AppConfig.baseWidth)
@@ -59,19 +63,62 @@ public struct DashboardView: View {
                 )
 
                 // =============================================================
-                // RIGHT COLUMN: 35% HORIZON (Softened Light Background)
+                // RIGHT COLUMN: 35% HORIZON & BACKLOG (Deck Carousel Panel)
                 // =============================================================
                 VStack(spacing: 0) {
-                    UpcomingHeaderView()
+                    ZStack {
+                        if !store.isShowingBacklog {
+                            // Panel A: Upcoming Horizon
+                            VStack(spacing: 0) {
+                                UpcomingHeaderView()
 
-                    VStack(spacing: 0) {
-                        UpcomingTimelineView(events: store.state.upcomingEvents)
-                        Spacer(minLength: 16 * scalar)
-                        BottomActionBarView(store: store)
+                                ScrollView(.vertical) {
+                                    UpcomingTimelineView(events: store.state.upcomingEvents)
+                                        .padding(.horizontal, 24 * scalar)
+                                        .padding(.top, 12 * scalar)
+                                        .padding(.bottom, 16 * scalar)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .leading).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                )
+                            )
+                        } else {
+                            // Panel B: Operational Backlog (Scrollable Composite Inventory)
+                            VStack(spacing: 0) {
+                                BacklogHeaderView(count: totalBacklogCount)
+
+                                ScrollView(.vertical) {
+                                    BacklogListView(
+                                        focusJobs: store.state.focusJobs,
+                                        upcomingEvents: store.state.upcomingEvents,
+                                        baselineTasks: store.state.baselineTasks
+                                    )
+                                    .padding(.horizontal, 24 * scalar)
+                                    .padding(.top, 12 * scalar)
+                                    .padding(.bottom, 24 * scalar)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                )
+                            )
+                        }
                     }
-                    .padding(.horizontal, 24 * scalar)
-                    .padding(.top, 12 * scalar)
-                    .padding(.bottom, 24 * scalar)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+
+                    // Anchored Tactile Action Dock
+                    BottomActionBarView(store: store)
+                        .padding(.horizontal, 24 * scalar)
+                        .padding(.top, 16 * scalar)
+                        .padding(.bottom, 24 * scalar)
                 }
                 .frame(
                     width: geometry.size.width * (1.0 - AppConfig.splitRatio),
