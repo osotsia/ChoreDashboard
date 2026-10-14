@@ -1,4 +1,4 @@
-// Sources/Models/DashboardState.swift
+// --- File: Sources/Models/DashboardState.swift ---
 import Foundation
 
 public struct DashboardState: Codable {
@@ -23,12 +23,12 @@ public struct DashboardState: Codable {
         focusTitle: String = "Main Tasks",
         focusSubtitle: String = "Targeted deep maintenance · Non-routine upkeep",
         heroTools: String = "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit.",
-        focusJobs: [FocusJob],
+        focusJobs: [FocusJob] = [],
         baselineTitle: String = "Daily Baseline",
         baselineSubtitle: String = "Est: 25 min · Daily maintenance",
         baselineRule: String = "RULE: Complete before noon.",
-        baselineTasks: [ChoreItem],
-        upcomingEvents: [HorizonEvent],
+        baselineTasks: [ChoreItem] = [],
+        upcomingEvents: [HorizonEvent] = [],
         telemetryMetrics: [TelemetryMetric] = [],
         historyRecords: [HistoryRecord] = [],
         customTags: [String] = []
@@ -83,16 +83,11 @@ public struct DashboardState: Codable {
         self.heroTools = try container.decodeIfPresent(String.self, forKey: .heroTools)
             ?? "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit."
 
-        if let rawJobs = try container.decodeIfPresent([FocusJob].self, forKey: .focusJobs), !rawJobs.isEmpty {
+        if let rawJobs = try container.decodeIfPresent([FocusJob].self, forKey: .focusJobs) {
             self.focusJobs = rawJobs
         } else if let legacyHeroTasks = try container.decodeIfPresent([ChoreItem].self, forKey: .heroTasks) {
             self.focusJobs = legacyHeroTasks.map {
-                FocusJob(
-                    id: $0.id,
-                    tag: "TASK",
-                    title: $0.title,
-                    notes: ""
-                )
+                FocusJob(id: $0.id, tag: "TASK", title: $0.title, notes: "")
             }
         } else {
             self.focusJobs = []
@@ -101,8 +96,8 @@ public struct DashboardState: Codable {
         self.baselineTitle = try container.decodeIfPresent(String.self, forKey: .baselineTitle) ?? "Daily Baseline"
         self.baselineSubtitle = try container.decodeIfPresent(String.self, forKey: .baselineSubtitle) ?? "Est: 25 min · Daily maintenance"
         self.baselineRule = try container.decodeIfPresent(String.self, forKey: .baselineRule) ?? "RULE: Complete before noon."
-        self.baselineTasks = try container.decode([ChoreItem].self, forKey: .baselineTasks)
-        self.upcomingEvents = try container.decode([HorizonEvent].self, forKey: .upcomingEvents)
+        self.baselineTasks = try container.decodeIfPresent([ChoreItem].self, forKey: .baselineTasks) ?? []
+        self.upcomingEvents = try container.decodeIfPresent([HorizonEvent].self, forKey: .upcomingEvents) ?? []
         self.telemetryMetrics = try container.decodeIfPresent([TelemetryMetric].self, forKey: .telemetryMetrics) ?? []
         self.historyRecords = try container.decodeIfPresent([HistoryRecord].self, forKey: .historyRecords) ?? []
         self.customTags = try container.decodeIfPresent([String].self, forKey: .customTags) ?? []

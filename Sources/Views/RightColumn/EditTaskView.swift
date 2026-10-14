@@ -1,4 +1,3 @@
-// Sources/Views/RightColumn/EditTaskView.swift
 import SwiftUI
 
 public struct EditTaskView: View {
@@ -6,15 +5,13 @@ public struct EditTaskView: View {
     public let target: EditableTaskTarget
     @Environment(\.scaleFactor) private var s
 
-    // Recurrence cadence
     @State private var isOneTime: Bool = false
     @State private var repeatCount: Int = 1
     @State private var repeatUnit: CadenceUnit = .month
+    @State private var durationMinutes: Int = 15
 
-    // Health state
     @State private var selectedState: TaskHealthState = .due
 
-    // Metadata
     @State private var title: String = ""
     @State private var selectedTag: String = ""
     @State private var isCreatingCustomTag: Bool = false
@@ -27,9 +24,8 @@ public struct EditTaskView: View {
     }
 
     private var effectiveTag: String {
-        let trimmedCustom = customTagText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if isCreatingCustomTag && !trimmedCustom.isEmpty {
-            return trimmedCustom
+        if isCreatingCustomTag {
+            return customTagText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         }
         return selectedTag.uppercased()
     }
@@ -56,7 +52,7 @@ public struct EditTaskView: View {
             return ("exclamationmark.triangle.fill", "Overdue hazard: Assigned high priority on Active Focus.", true)
         case .due:
             if repeatUnit == .day && repeatCount == 1 {
-                return ("checklist", "Daily routine: Assigned to Daily Baseline.", true)
+                return ("checklist", "Daily routine: Assigned to Daily Baseline (\(durationMinutes) min).", true)
             }
             return ("bolt.fill", "Due today: Active on Today's Focus Queue.", true)
         case .notYet:
@@ -88,6 +84,7 @@ public struct EditTaskView: View {
             title: title,
             tag: effectiveTag,
             notes: notes,
+            durationMinutes: durationMinutes,
             isOneTime: isOneTime,
             repeatCount: repeatCount,
             repeatUnit: repeatUnit,
@@ -97,9 +94,7 @@ public struct EditTaskView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 16 * s) {
-            // =================================================================
-            // 1. TASK TITLE
-            // =================================================================
+            // 1. Task Title
             VStack(alignment: .leading, spacing: 6 * s) {
                 Text("TASK IDENTIFIER")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -119,9 +114,7 @@ public struct EditTaskView: View {
                     )
             }
 
-            // =================================================================
-            // 2. SYSTEM TAG REGISTRY (Chips + Inline Custom Confirm)
-            // =================================================================
+            // 2. System Tag Registry
             VStack(alignment: .leading, spacing: 6 * s) {
                 Text("SYSTEM TAG")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -153,6 +146,18 @@ public struct EditTaskView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            if store.state.customTags.contains(tag) {
+                                Button(role: .destructive) {
+                                    store.deleteCustomTag(tag)
+                                    if selectedTag == tag {
+                                        selectedTag = store.availableTags.first ?? ""
+                                    }
+                                } label: {
+                                    Label("Delete Tag", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
 
                     Button(action: {
@@ -191,9 +196,7 @@ public struct EditTaskView: View {
                                 RoundedRectangle(cornerRadius: 5 * s)
                                     .strokeBorder(Color.black, lineWidth: 1.2 * s)
                             )
-                            .onSubmit {
-                                confirmCustomTag()
-                            }
+                            .onSubmit { confirmCustomTag() }
 
                         Button(action: confirmCustomTag) {
                             Text("ADD")
@@ -223,9 +226,7 @@ public struct EditTaskView: View {
                 }
             }
 
-            // =================================================================
-            // 3. RECURRENCE CADENCE (Dual Pod Steppers)
-            // =================================================================
+            // 3. Recurrence Cadence
             VStack(alignment: .leading, spacing: 8 * s) {
                 HStack {
                     Text("RECURRENCE CADENCE")
@@ -236,12 +237,8 @@ public struct EditTaskView: View {
                     Spacer()
 
                     HStack(spacing: 2 * s) {
-                        CadenceTypeTab(title: "RECURRING", isSelected: !isOneTime, s: s) {
-                            isOneTime = false
-                        }
-                        CadenceTypeTab(title: "ONE-TIME", isSelected: isOneTime, s: s) {
-                            isOneTime = true
-                        }
+                        CadenceTypeTab(title: "RECURRING", isSelected: !isOneTime, s: s) { isOneTime = false }
+                        CadenceTypeTab(title: "ONE-TIME", isSelected: isOneTime, s: s) { isOneTime = true }
                     }
                     .padding(2 * s)
                     .background(Color.black.opacity(0.06))
@@ -250,11 +247,8 @@ public struct EditTaskView: View {
 
                 if !isOneTime {
                     HStack(spacing: 10 * s) {
-                        // Count Stepper Pod
                         HStack(spacing: 0) {
-                            Button(action: {
-                                if repeatCount > 1 { repeatCount -= 1 }
-                            }) {
+                            Button(action: { if repeatCount > 1 { repeatCount -= 1 } }) {
                                 Image(systemName: "minus")
                                     .font(.system(size: 11 * s, weight: .bold))
                                     .foregroundColor(.black)
@@ -271,9 +265,7 @@ public struct EditTaskView: View {
 
                             Divider().frame(height: 20 * s)
 
-                            Button(action: {
-                                repeatCount += 1
-                            }) {
+                            Button(action: { repeatCount += 1 }) {
                                 Image(systemName: "plus")
                                     .font(.system(size: 11 * s, weight: .bold))
                                     .foregroundColor(.black)
@@ -284,16 +276,10 @@ public struct EditTaskView: View {
                         }
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 7 * s))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7 * s)
-                                .strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s)
-                        )
+                        .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
 
-                        // Unit Stepper Pod
                         HStack(spacing: 0) {
-                            Button(action: {
-                                repeatUnit = repeatUnit.previous()
-                            }) {
+                            Button(action: { repeatUnit = repeatUnit.previous() }) {
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 11 * s, weight: .bold))
                                     .foregroundColor(.black)
@@ -311,9 +297,7 @@ public struct EditTaskView: View {
 
                             Divider().frame(height: 20 * s)
 
-                            Button(action: {
-                                repeatUnit = repeatUnit.next()
-                            }) {
+                            Button(action: { repeatUnit = repeatUnit.next() }) {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 11 * s, weight: .bold))
                                     .foregroundColor(.black)
@@ -324,10 +308,42 @@ public struct EditTaskView: View {
                         }
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 7 * s))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7 * s)
-                                .strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s)
-                        )
+                        .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
+                    }
+
+                    if repeatUnit == .day && repeatCount == 1 {
+                        HStack {
+                            Text("DAILY DURATION")
+                                .font(.system(size: 10 * s, weight: .bold))
+                                .tracking(1.4 * s)
+                                .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                            Spacer()
+
+                            HStack(spacing: 0) {
+                                Button(action: { if durationMinutes > 5 { durationMinutes -= 5 } }) {
+                                    Image(systemName: "minus")
+                                        .font(.system(size: 10 * s, weight: .bold))
+                                        .frame(width: 28 * s, height: 30 * s)
+                                }
+                                .buttonStyle(SubtlePressStyle())
+
+                                Text("\(durationMinutes) MIN")
+                                    .font(.system(size: 11 * s, weight: .bold, design: .monospaced))
+                                    .padding(.horizontal, 6 * s)
+
+                                Button(action: { durationMinutes += 5 }) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 10 * s, weight: .bold))
+                                        .frame(width: 28 * s, height: 30 * s)
+                                }
+                                .buttonStyle(SubtlePressStyle())
+                            }
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 5 * s))
+                            .overlay(RoundedRectangle(cornerRadius: 5 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
+                        }
+                        .padding(.top, 4 * s)
                     }
                 } else {
                     HStack(spacing: 6 * s) {
@@ -343,16 +359,11 @@ public struct EditTaskView: View {
                     .frame(height: 42 * s)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 7 * s))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7 * s)
-                            .strokeBorder(Color.black.opacity(0.12), lineWidth: 1 * s)
-                    )
+                    .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.12), lineWidth: 1 * s))
                 }
             }
 
-            // =================================================================
-            // 4. CURRENT STATUS & RUNWAY GAUGE
-            // =================================================================
+            // 4. Current Status & Runway Gauge
             VStack(alignment: .leading, spacing: 8 * s) {
                 Text("CURRENT OPERATIONAL STATUS")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -381,19 +392,14 @@ public struct EditTaskView: View {
                             .background(isSelected ? (state == .overdue ? Color.red : Color.black) : Color.white)
                             .foregroundColor(isSelected ? .white : Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 6 * s))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6 * s)
-                                    .strokeBorder(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1 * s)
-                            )
+                            .overlay(RoundedRectangle(cornerRadius: 6 * s).strokeBorder(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1 * s))
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
-                // Health Runway Progress Bar Graphic
                 HealthRunwayGauge(state: selectedState, s: s)
 
-                // Routing Explanation
                 HStack(alignment: .center, spacing: 8 * s) {
                     Image(systemName: routingInfo.icon)
                         .font(.system(size: 11 * s, weight: .bold))
@@ -411,9 +417,7 @@ public struct EditTaskView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6 * s))
             }
 
-            // =================================================================
-            // 5. RUN NOTES / SPECS
-            // =================================================================
+            // 5. Run Notes / Specs
             VStack(alignment: .leading, spacing: 6 * s) {
                 Text("OPERATIONAL CONTEXT / NOTES (OPTIONAL)")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -427,15 +431,10 @@ public struct EditTaskView: View {
                     .padding(.vertical, 8 * s)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 6 * s))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6 * s)
-                            .strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s)
-                    )
+                    .overlay(RoundedRectangle(cornerRadius: 6 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
             }
 
-            // =================================================================
-            // 6. EXECUTION DOCK (Save, Cancel, Delete)
-            // =================================================================
+            // 6. Execution Dock
             VStack(spacing: 8 * s) {
                 Button(action: saveTask) {
                     HStack(spacing: 6 * s) {
@@ -469,7 +468,6 @@ public struct EditTaskView: View {
                 }
                 .buttonStyle(.plain)
 
-                // Dedicated Delete Action
                 Button(action: {
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
                         store.deleteTask(target: target)
@@ -502,17 +500,18 @@ public struct EditTaskView: View {
         case .focus(let job):
             title = job.title
             selectedTag = job.tag.uppercased()
-            let isOverdue = job.notes.contains("[OVERDUE]")
-            notes = job.notes.replacingOccurrences(of: "[OVERDUE] ", with: "")
+            notes = job.notes
+            durationMinutes = 15
             isOneTime = false
             repeatCount = 1
             repeatUnit = .week
-            selectedState = isOverdue ? .overdue : (job.isCompleted ? .good : .due)
+            selectedState = job.isOverdue ? .overdue : (job.isCompleted ? .good : .due)
 
         case .baseline(let task):
             title = task.title
             selectedTag = task.tag.uppercased()
             notes = ""
+            durationMinutes = task.durationMinutes
             isOneTime = false
             repeatCount = 1
             repeatUnit = .day
@@ -522,9 +521,9 @@ public struct EditTaskView: View {
             title = event.title
             selectedTag = event.tag.uppercased()
             notes = event.notes
+            durationMinutes = 15
             isOneTime = false
 
-            // Infer interval from anchor if available
             let lower = event.timeAnchor.lowercased()
             if lower.contains("month") {
                 repeatUnit = .month
@@ -539,35 +538,5 @@ public struct EditTaskView: View {
 
             selectedState = .notYet
         }
-    }
-}
-
-// MARK: - Reusable Styles
-private struct CadenceTypeTab: View {
-    let title: String
-    let isSelected: Bool
-    let s: CGFloat
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 8.5 * s, weight: isSelected ? .black : .bold))
-                .tracking(0.6 * s)
-                .padding(.horizontal, 8 * s)
-                .padding(.vertical, 4 * s)
-                .background(isSelected ? Color.white : Color.clear)
-                .foregroundColor(isSelected ? .black : AppConfig.Colors.subtextGrey)
-                .clipShape(RoundedRectangle(cornerRadius: 4 * s))
-                .shadow(color: isSelected ? Color.black.opacity(0.08) : Color.clear, radius: 2, y: 1)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct SubtlePressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(configuration.isPressed ? Color.black.opacity(0.06) : Color.clear)
     }
 }

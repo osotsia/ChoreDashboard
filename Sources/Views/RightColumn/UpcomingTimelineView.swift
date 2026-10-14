@@ -1,4 +1,4 @@
-// Sources/Views/RightColumn/UpcomingTimelineView.swift
+// --- File: Sources/Views/RightColumn/UpcomingTimelineView.swift ---
 import SwiftUI
 
 public struct UpcomingTimelineView: View {
@@ -62,7 +62,7 @@ public struct UpcomingTimelineView: View {
                         Button {
                             onEdit(event)
                         } label: {
-                            Label("Edit Event", systemImage: "pencil")
+                            Label("Edit", systemImage: "pencil")
                         }
                     }
                 }

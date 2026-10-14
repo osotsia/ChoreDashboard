@@ -1,4 +1,3 @@
-// Sources/Views/Components/FocusJobTile.swift
 import SwiftUI
 
 public struct FocusJobTile: View {
@@ -14,7 +13,7 @@ public struct FocusJobTile: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header Row: System Tag + Checkbox
+            // Header Row: Tag + Status Badges + Checkbox
             HStack(alignment: .center) {
                 Text(job.tag.uppercased())
                     .font(.system(size: 10 * s, weight: .bold))
@@ -22,13 +21,24 @@ public struct FocusJobTile: View {
                     .foregroundColor(job.isCompleted ? Color.white.opacity(0.35) : Color.white.opacity(0.7))
                     .lineLimit(1)
 
+                if job.isOverdue && !job.isCompleted {
+                    Text("OVERDUE")
+                        .font(.system(size: 8.5 * s, weight: .black))
+                        .tracking(0.6 * s)
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 4 * s)
+                        .padding(.vertical, 1.5 * s)
+                        .background(Color.red.opacity(0.18))
+                        .clipShape(RoundedRectangle(cornerRadius: 3 * s))
+                }
+
                 Spacer()
 
                 Button(action: onToggle) {
                     ZStack {
                         Rectangle()
                             .strokeBorder(
-                                job.isCompleted ? Color.white : Color.white.opacity(0.35),
+                                job.isCompleted ? Color.white : (job.isOverdue ? Color.red : Color.white.opacity(0.35)),
                                 lineWidth: 1.5 * s
                             )
                             .frame(width: 17 * s, height: 17 * s)
@@ -46,7 +56,6 @@ public struct FocusJobTile: View {
             }
             .padding(.bottom, 8 * s)
 
-            // Primary Job Title
             Text(job.title)
                 .font(.system(size: 14 * s, weight: .bold))
                 .foregroundColor(job.isCompleted ? Color.white.opacity(0.4) : .white)
@@ -56,7 +65,6 @@ public struct FocusJobTile: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, hasSubtitleComment ? 6 * s : 0)
 
-            // Contextual Subtitle
             if hasSubtitleComment {
                 Text(job.notes)
                     .font(.system(size: 12 * s, weight: .medium))
@@ -85,7 +93,7 @@ public struct FocusJobTile: View {
         .contextMenu {
             if let onEdit = onEdit {
                 Button(action: onEdit) {
-                    Label("Edit Operation", systemImage: "pencil")
+                    Label("Edit", systemImage: "pencil")
                 }
             }
         }

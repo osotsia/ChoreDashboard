@@ -1,9 +1,8 @@
-// Sources/Store/DashboardStore.swift
+// --- File: Sources/Store/DashboardStore.swift ---
 import SwiftUI
 import Observation
 import CryptoKit
 
-// MARK: - Navigation Modes
 public enum RightPanelTab: String, Codable {
     case upcoming
     case backlog
@@ -12,7 +11,6 @@ public enum RightPanelTab: String, Codable {
     case edit
 }
 
-// MARK: - Polymorphic Edit Target
 public enum EditableTaskTarget: Identifiable, Equatable {
     case focus(FocusJob)
     case baseline(ChoreItem)
@@ -29,7 +27,7 @@ public enum EditableTaskTarget: Identifiable, Equatable {
     public static func == (lhs: EditableTaskTarget, rhs: EditableTaskTarget) -> Bool {
         switch (lhs, rhs) {
         case (.focus(let a), .focus(let b)):
-            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.notes == b.notes && a.isCompleted == b.isCompleted
+            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.notes == b.notes && a.isCompleted == b.isCompleted && a.isOverdue == b.isOverdue
         case (.baseline(let a), .baseline(let b)):
             return a.id == b.id && a.title == b.title && a.tag == b.tag && a.durationMinutes == b.durationMinutes && a.isCompleted == b.isCompleted
         case (.horizon(let a), .horizon(let b)):
@@ -40,7 +38,6 @@ public enum EditableTaskTarget: Identifiable, Equatable {
     }
 }
 
-// MARK: - Cadence & Health Domain Enums
 public enum CadenceUnit: String, CaseIterable, Codable {
     case day = "Day"
     case week = "Week"
@@ -90,7 +87,6 @@ public enum TaskHealthState: String, CaseIterable, Codable {
     }
 }
 
-// MARK: - Dedicated Non-Isolated File System Monitor
 private final class DirectoryWatcher: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private var descriptor: Int32 = -1
@@ -106,14 +102,8 @@ private final class DirectoryWatcher: @unchecked Sendable {
             queue: DispatchQueue.global(qos: .utility)
         )
 
-        source.setEventHandler {
-            onChange()
-        }
-
-        source.setCancelHandler {
-            close(descriptor)
-        }
-
+        source.setEventHandler { onChange() }
+        source.setCancelHandler { close(descriptor) }
         source.resume()
         self.source = source
     }
@@ -123,7 +113,6 @@ private final class DirectoryWatcher: @unchecked Sendable {
     }
 }
 
-// MARK: - Thread-Safe Background Storage Engine
 private actor StatePersistenceEngine {
     private let storageURL: URL
     private var lastPersistedChecksum: SHA256Digest?
@@ -167,7 +156,6 @@ private actor StatePersistenceEngine {
     }
 }
 
-// MARK: - Main Actor Dashboard Store
 @Observable
 @MainActor
 public final class DashboardStore {
@@ -184,8 +172,9 @@ public final class DashboardStore {
     public var availableTags: [String] {
         var tags = Set<String>()
 
+        // Split only on bullets or commas so hyphens (e.g. POST-MORTEM) remain intact
         let sanitize: (String) -> String = { raw in
-            let clean = raw.components(separatedBy: CharacterSet(charactersIn: "·-–,"))[0]
+            let clean = raw.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
             return clean.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         }
 
@@ -228,10 +217,20 @@ public final class DashboardStore {
         if let initial = Self.loadInitialBlocking(from: fileURL) {
             self.state = initial
         } else {
+            // Backup corrupt file if present to preserve user data
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                let backupURL = fileURL.deletingPathExtension()
+                    .appendingPathExtension("corrupt.\(Int(Date().timeIntervalSince1970)).json")
+                try? FileManager.default.copyItem(at: fileURL, to: backupURL)
+                print("[DashboardStore] Corrupted state.json preserved to \(backupURL.lastPathComponent)")
+            }
+
             let fallback = PreviewData.defaultState
             self.state = fallback
-            Task {
-                await engine.write(fallback)
+            if !FileManager.default.fileExists(atPath: fileURL.path) {
+                Task {
+                    await engine.write(fallback)
+                }
             }
         }
 
@@ -245,9 +244,12 @@ public final class DashboardStore {
         }
     }
 
-    // MARK: - Navigation Control
     public func selectRightTab(_ tab: RightPanelTab) {
         guard tab != activeRightTab else { return }
+
+        if activeRightTab == .edit && tab != .edit {
+            editingTarget = nil
+        }
 
         if activeRightTab != .create && activeRightTab != .edit {
             previousRightTab = activeRightTab
@@ -268,7 +270,6 @@ public final class DashboardStore {
         selectRightTab(activeRightTab == .backlog ? .upcoming : .backlog)
     }
 
-    // MARK: - Edit Workflow Activation
     public func startEditing(focusJob: FocusJob) {
         editingTarget = .focus(focusJob)
         selectRightTab(.edit)
@@ -284,12 +285,12 @@ public final class DashboardStore {
         selectRightTab(.edit)
     }
 
-    // MARK: - In-Place Task Modification with Migration
     public func applyEditedTask(
         target: EditableTaskTarget,
         title: String,
         tag: String,
         notes: String,
+        durationMinutes: Int,
         isOneTime: Bool,
         repeatCount: Int,
         repeatUnit: CadenceUnit,
@@ -298,26 +299,43 @@ public final class DashboardStore {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let targetId = target.id
 
         addCustomTag(cleanTag)
 
-        // Remove old entry from its source container
+        let originalCompleted: Bool
         switch target {
         case .focus(let job):
-            state.focusJobs.removeAll(where: { $0.id == job.id })
+            originalCompleted = job.isCompleted
+            state.focusJobs.removeAll(where: { $0.id == targetId })
         case .baseline(let task):
-            state.baselineTasks.removeAll(where: { $0.id == task.id })
-        case .horizon(let event):
-            state.upcomingEvents.removeAll(where: { $0.id == event.id })
+            originalCompleted = task.isCompleted
+            state.baselineTasks.removeAll(where: { $0.id == targetId })
+        case .horizon:
+            originalCompleted = false
+            state.upcomingEvents.removeAll(where: { $0.id == targetId })
         }
 
-        // Re-dispatch into the appropriate container based on the updated state
         if healthState == .due || healthState == .overdue {
             if !isOneTime && repeatUnit == .day && repeatCount == 1 {
-                addBaselineTask(title: cleanTitle, tag: cleanTag, durationMinutes: 15)
+                let task = ChoreItem(
+                    id: targetId,
+                    title: cleanTitle,
+                    durationMinutes: durationMinutes,
+                    tag: cleanTag,
+                    isCompleted: originalCompleted
+                )
+                state.baselineTasks.append(task)
             } else {
-                let notePrefix = (healthState == .overdue) ? "[OVERDUE] " : ""
-                addFocusJob(title: cleanTitle, tag: cleanTag, notes: notePrefix + cleanNotes)
+                let job = FocusJob(
+                    id: targetId,
+                    tag: cleanTag,
+                    title: cleanTitle,
+                    notes: cleanNotes,
+                    isCompleted: originalCompleted,
+                    isOverdue: healthState == .overdue
+                )
+                state.focusJobs.append(job)
             }
         } else {
             let intervalDays = isOneTime ? 7 : repeatUnit.days(count: repeatCount)
@@ -335,7 +353,14 @@ public final class DashboardStore {
                 timeAnchor = "In \(months) Months (\(daysUntilDue)d)"
             }
 
-            addUpcomingEvent(title: cleanTitle, tag: cleanTag, notes: cleanNotes, timeAnchor: timeAnchor)
+            let event = HorizonEvent(
+                id: targetId,
+                tag: cleanTag,
+                title: cleanTitle,
+                notes: cleanNotes,
+                timeAnchor: timeAnchor
+            )
+            state.upcomingEvents.append(event)
         }
 
         dismissEditTask()
@@ -343,21 +368,21 @@ public final class DashboardStore {
     }
 
     public func deleteTask(target: EditableTaskTarget) {
+        let targetId = target.id
         switch target {
-        case .focus(let job):
-            state.focusJobs.removeAll(where: { $0.id == job.id })
-        case .baseline(let task):
-            state.baselineTasks.removeAll(where: { $0.id == task.id })
-        case .horizon(let event):
-            state.upcomingEvents.removeAll(where: { $0.id == event.id })
+        case .focus:
+            state.focusJobs.removeAll(where: { $0.id == targetId })
+        case .baseline:
+            state.baselineTasks.removeAll(where: { $0.id == targetId })
+        case .horizon:
+            state.upcomingEvents.removeAll(where: { $0.id == targetId })
         }
         dismissEditTask()
         persistAsync()
     }
 
-    // MARK: - Custom Tag Management
     public func addCustomTag(_ tag: String) {
-        let clean = tag.components(separatedBy: CharacterSet(charactersIn: "·-–,"))[0]
+        let clean = tag.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
 
@@ -369,11 +394,17 @@ public final class DashboardStore {
         }
     }
 
-    // MARK: - Intelligent Cadence Dispatch Engine
+    public func deleteCustomTag(_ tag: String) {
+        let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        state.customTags.removeAll(where: { $0.uppercased() == clean })
+        persistAsync()
+    }
+
     public func dispatchConfiguredTask(
         title: String,
         tag: String,
         notes: String,
+        durationMinutes: Int,
         isOneTime: Bool,
         repeatCount: Int,
         repeatUnit: CadenceUnit,
@@ -382,16 +413,32 @@ public final class DashboardStore {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newId = UUID()
 
         addCustomTag(cleanTag)
 
         if healthState == .due || healthState == .overdue {
             if !isOneTime && repeatUnit == .day && repeatCount == 1 {
-                addBaselineTask(title: cleanTitle, tag: cleanTag, durationMinutes: 15)
+                let task = ChoreItem(
+                    id: newId,
+                    title: cleanTitle,
+                    durationMinutes: durationMinutes,
+                    tag: cleanTag,
+                    isCompleted: false
+                )
+                state.baselineTasks.append(task)
             } else {
-                let notePrefix = (healthState == .overdue) ? "[OVERDUE] " : ""
-                addFocusJob(title: cleanTitle, tag: cleanTag, notes: notePrefix + cleanNotes)
+                let job = FocusJob(
+                    id: newId,
+                    tag: cleanTag,
+                    title: cleanTitle,
+                    notes: cleanNotes,
+                    isCompleted: false,
+                    isOverdue: healthState == .overdue
+                )
+                state.focusJobs.append(job)
             }
+            persistAsync()
             return
         }
 
@@ -411,10 +458,18 @@ public final class DashboardStore {
             timeAnchor = "In \(months) Months (\(daysUntilDue)d)"
         }
 
-        addUpcomingEvent(title: cleanTitle, tag: cleanTag, notes: cleanNotes, timeAnchor: timeAnchor)
+        let event = HorizonEvent(
+            id: newId,
+            tag: cleanTag,
+            title: cleanTitle,
+            notes: cleanNotes,
+            timeAnchor: timeAnchor
+        )
+        state.upcomingEvents.append(event)
 
         if healthState == .good {
             let record = HistoryRecord(
+                jobId: newId,
                 title: cleanTitle,
                 tag: cleanTag,
                 completedAt: Date(),
@@ -423,44 +478,6 @@ public final class DashboardStore {
             state.historyRecords.insert(record, at: 0)
         }
 
-        persistAsync()
-    }
-
-    // MARK: - Domain Mutation Primitives
-    public func addFocusJob(title: String, tag: String, notes: String) {
-        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let job = FocusJob(
-            tag: cleanTag.isEmpty ? "OPERATION" : cleanTag,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            isCompleted: false
-        )
-        state.focusJobs.append(job)
-        persistAsync()
-    }
-
-    public func addBaselineTask(title: String, tag: String, durationMinutes: Int) {
-        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).capitalized
-        let task = ChoreItem(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            durationMinutes: max(1, durationMinutes),
-            tag: cleanTag.isEmpty ? "General" : cleanTag,
-            isCompleted: false
-        )
-        state.baselineTasks.append(task)
-        persistAsync()
-    }
-
-    public func addUpcomingEvent(title: String, tag: String, notes: String, timeAnchor: String) {
-        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanAnchor = timeAnchor.trimmingCharacters(in: .whitespacesAndNewlines)
-        let event = HorizonEvent(
-            tag: cleanTag.isEmpty ? "Scheduled" : cleanTag,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            timeAnchor: cleanAnchor.isEmpty ? "Upcoming" : cleanAnchor
-        )
-        state.upcomingEvents.append(event)
         persistAsync()
     }
 
@@ -515,19 +532,6 @@ public final class DashboardStore {
                 state.historyRecords.remove(at: recordIdx)
             }
         }
-
-        persistAsync()
-    }
-
-    public func recordJobCompletion(job: FocusJob, note: String = "") {
-        let record = HistoryRecord(
-            jobId: job.id,
-            title: job.title,
-            tag: job.tag,
-            completedAt: Date(),
-            note: note.isEmpty ? job.notes : note
-        )
-        state.historyRecords.insert(record, at: 0)
         persistAsync()
     }
 
@@ -546,7 +550,6 @@ public final class DashboardStore {
         }
     }
 
-    // MARK: - Asynchronous Persistence Dispatch
     private func persistAsync() {
         let snapshot = state
         Task {

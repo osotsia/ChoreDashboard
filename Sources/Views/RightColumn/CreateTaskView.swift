@@ -1,19 +1,17 @@
-// Sources/Views/RightColumn/CreateTaskView.swift
+// --- File: Sources/Views/RightColumn/CreateTaskView.swift ---
 import SwiftUI
 
 public struct CreateTaskView: View {
     public var store: DashboardStore
     @Environment(\.scaleFactor) private var s
 
-    // Recurrence cadence
     @State private var isOneTime: Bool = false
     @State private var repeatCount: Int = 1
     @State private var repeatUnit: CadenceUnit = .month
+    @State private var durationMinutes: Int = 15
 
-    // Health state
     @State private var selectedState: TaskHealthState = .good
 
-    // Metadata
     @State private var title: String = ""
     @State private var selectedTag: String = ""
     @State private var isCreatingCustomTag: Bool = false
@@ -25,9 +23,8 @@ public struct CreateTaskView: View {
     }
 
     private var effectiveTag: String {
-        let trimmedCustom = customTagText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if isCreatingCustomTag && !trimmedCustom.isEmpty {
-            return trimmedCustom
+        if isCreatingCustomTag {
+            return customTagText.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         }
         return selectedTag.uppercased()
     }
@@ -54,7 +51,7 @@ public struct CreateTaskView: View {
             return ("exclamationmark.triangle.fill", "Overdue: Added to Today's Focus Queue as high priority.", true)
         case .due:
             if repeatUnit == .day && repeatCount == 1 {
-                return ("checklist", "Daily routine: Added directly to Daily Baseline.", true)
+                return ("checklist", "Daily routine: Added directly to Daily Baseline (\(durationMinutes) min).", true)
             }
             return ("bolt.fill", "Due today: Added directly to Today's Focus Queue.", true)
         case .notYet:
@@ -85,6 +82,7 @@ public struct CreateTaskView: View {
             title: title,
             tag: effectiveTag,
             notes: notes,
+            durationMinutes: durationMinutes,
             isOneTime: isOneTime,
             repeatCount: repeatCount,
             repeatUnit: repeatUnit,
@@ -98,9 +96,7 @@ public struct CreateTaskView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 16 * s) {
-            // =================================================================
-            // 1. TASK TITLE
-            // =================================================================
+            // 1. Task Title
             VStack(alignment: .leading, spacing: 6 * s) {
                 Text("TASK IDENTIFIER")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -120,9 +116,7 @@ public struct CreateTaskView: View {
                     )
             }
 
-            // =================================================================
-            // 2. SYSTEM TAG REGISTRY (Chips + Inline Custom Confirm)
-            // =================================================================
+            // 2. System Tag Registry
             VStack(alignment: .leading, spacing: 6 * s) {
                 Text("SYSTEM TAG")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -154,6 +148,18 @@ public struct CreateTaskView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            if store.state.customTags.contains(tag) {
+                                Button(role: .destructive) {
+                                    store.deleteCustomTag(tag)
+                                    if selectedTag == tag {
+                                        selectedTag = store.availableTags.first ?? ""
+                                    }
+                                } label: {
+                                    Label("Delete Tag", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
 
                     Button(action: {
@@ -192,9 +198,7 @@ public struct CreateTaskView: View {
                                 RoundedRectangle(cornerRadius: 5 * s)
                                     .strokeBorder(Color.black, lineWidth: 1.2 * s)
                             )
-                            .onSubmit {
-                                confirmCustomTag()
-                            }
+                            .onSubmit { confirmCustomTag() }
 
                         Button(action: confirmCustomTag) {
                             Text("ADD")
@@ -224,9 +228,7 @@ public struct CreateTaskView: View {
                 }
             }
 
-            // =================================================================
-            // 3. RECURRENCE CADENCE (Dual Pod Steppers)
-            // =================================================================
+            // 3. Recurrence Cadence
             VStack(alignment: .leading, spacing: 8 * s) {
                 HStack {
                     Text("RECURRENCE CADENCE")
@@ -237,12 +239,8 @@ public struct CreateTaskView: View {
                     Spacer()
 
                     HStack(spacing: 2 * s) {
-                        CadenceTypeTab(title: "RECURRING", isSelected: !isOneTime, s: s) {
-                            isOneTime = false
-                        }
-                        CadenceTypeTab(title: "ONE-TIME", isSelected: isOneTime, s: s) {
-                            isOneTime = true
-                        }
+                        CadenceTypeTab(title: "RECURRING", isSelected: !isOneTime, s: s) { isOneTime = false }
+                        CadenceTypeTab(title: "ONE-TIME", isSelected: isOneTime, s: s) { isOneTime = true }
                     }
                     .padding(2 * s)
                     .background(Color.black.opacity(0.06))
@@ -251,11 +249,8 @@ public struct CreateTaskView: View {
 
                 if !isOneTime {
                     HStack(spacing: 10 * s) {
-                        // Count Stepper Pod
                         HStack(spacing: 0) {
-                            Button(action: {
-                                if repeatCount > 1 { repeatCount -= 1 }
-                            }) {
+                            Button(action: { if repeatCount > 1 { repeatCount -= 1 } }) {
                                 Image(systemName: "minus")
                                     .font(.system(size: 11 * s, weight: .bold))
                                     .foregroundColor(.black)
@@ -272,9 +267,7 @@ public struct CreateTaskView: View {
 
                             Divider().frame(height: 20 * s)
 
-                            Button(action: {
-                                repeatCount += 1
-                            }) {
+                            Button(action: { repeatCount += 1 }) {
                                 Image(systemName: "plus")
                                     .font(.system(size: 11 * s, weight: .bold))
                                     .foregroundColor(.black)
@@ -285,16 +278,10 @@ public struct CreateTaskView: View {
                         }
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 7 * s))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7 * s)
-                                .strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s)
-                        )
+                        .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
 
-                        // Unit Stepper Pod
                         HStack(spacing: 0) {
-                            Button(action: {
-                                repeatUnit = repeatUnit.previous()
-                            }) {
+                            Button(action: { repeatUnit = repeatUnit.previous() }) {
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 11 * s, weight: .bold))
                                     .foregroundColor(.black)
@@ -312,9 +299,7 @@ public struct CreateTaskView: View {
 
                             Divider().frame(height: 20 * s)
 
-                            Button(action: {
-                                repeatUnit = repeatUnit.next()
-                            }) {
+                            Button(action: { repeatUnit = repeatUnit.next() }) {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 11 * s, weight: .bold))
                                     .foregroundColor(.black)
@@ -325,10 +310,42 @@ public struct CreateTaskView: View {
                         }
                         .background(Color.white)
                         .clipShape(RoundedRectangle(cornerRadius: 7 * s))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 7 * s)
-                                .strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s)
-                        )
+                        .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
+                    }
+
+                    if repeatUnit == .day && repeatCount == 1 {
+                        HStack {
+                            Text("DAILY DURATION")
+                                .font(.system(size: 10 * s, weight: .bold))
+                                .tracking(1.4 * s)
+                                .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                            Spacer()
+
+                            HStack(spacing: 0) {
+                                Button(action: { if durationMinutes > 5 { durationMinutes -= 5 } }) {
+                                    Image(systemName: "minus")
+                                        .font(.system(size: 10 * s, weight: .bold))
+                                        .frame(width: 28 * s, height: 30 * s)
+                                }
+                                .buttonStyle(SubtlePressStyle())
+
+                                Text("\(durationMinutes) MIN")
+                                    .font(.system(size: 11 * s, weight: .bold, design: .monospaced))
+                                    .padding(.horizontal, 6 * s)
+
+                                Button(action: { durationMinutes += 5 }) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 10 * s, weight: .bold))
+                                        .frame(width: 28 * s, height: 30 * s)
+                                }
+                                .buttonStyle(SubtlePressStyle())
+                            }
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 5 * s))
+                            .overlay(RoundedRectangle(cornerRadius: 5 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
+                        }
+                        .padding(.top, 4 * s)
                     }
                 } else {
                     HStack(spacing: 6 * s) {
@@ -344,16 +361,11 @@ public struct CreateTaskView: View {
                     .frame(height: 42 * s)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 7 * s))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7 * s)
-                            .strokeBorder(Color.black.opacity(0.12), lineWidth: 1 * s)
-                    )
+                    .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.12), lineWidth: 1 * s))
                 }
             }
 
-            // =================================================================
-            // 4. CURRENT STATUS & RUNWAY GAUGE
-            // =================================================================
+            // 4. Current Status & Runway Gauge
             VStack(alignment: .leading, spacing: 8 * s) {
                 Text("CURRENT OPERATIONAL STATUS")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -382,19 +394,14 @@ public struct CreateTaskView: View {
                             .background(isSelected ? (state == .overdue ? Color.red : Color.black) : Color.white)
                             .foregroundColor(isSelected ? .white : Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 6 * s))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6 * s)
-                                    .strokeBorder(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1 * s)
-                            )
+                            .overlay(RoundedRectangle(cornerRadius: 6 * s).strokeBorder(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1 * s))
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
-                // Health Runway Progress Bar Graphic
                 HealthRunwayGauge(state: selectedState, s: s)
 
-                // Routing Explanation
                 HStack(alignment: .center, spacing: 8 * s) {
                     Image(systemName: routingInfo.icon)
                         .font(.system(size: 11 * s, weight: .bold))
@@ -412,9 +419,7 @@ public struct CreateTaskView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6 * s))
             }
 
-            // =================================================================
-            // 5. RUN NOTES / SPECS
-            // =================================================================
+            // 5. Run Notes / Specs
             VStack(alignment: .leading, spacing: 6 * s) {
                 Text("OPERATIONAL CONTEXT / NOTES (OPTIONAL)")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -428,15 +433,10 @@ public struct CreateTaskView: View {
                     .padding(.vertical, 8 * s)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 6 * s))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6 * s)
-                            .strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s)
-                    )
+                    .overlay(RoundedRectangle(cornerRadius: 6 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
             }
 
-            // =================================================================
-            // 6. EXECUTION DOCK
-            // =================================================================
+            // 6. Execution Dock
             VStack(spacing: 8 * s) {
                 Button(action: commitTask) {
                     HStack(spacing: 6 * s) {
@@ -555,13 +555,20 @@ public struct HealthRunwayGauge: View {
 }
 
 // MARK: - Reusable Styles
-private struct CadenceTypeTab: View {
+public struct CadenceTypeTab: View {
     let title: String
     let isSelected: Bool
     let s: CGFloat
     let action: () -> Void
 
-    var body: some View {
+    public init(title: String, isSelected: Bool, s: CGFloat, action: @escaping () -> Void) {
+        self.title = title
+        self.isSelected = isSelected
+        self.s = s
+        self.action = action
+    }
+
+    public var body: some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 8.5 * s, weight: isSelected ? .black : .bold))
@@ -577,8 +584,10 @@ private struct CadenceTypeTab: View {
     }
 }
 
-private struct SubtlePressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
+public struct SubtlePressStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(configuration.isPressed ? Color.black.opacity(0.06) : Color.clear)
     }

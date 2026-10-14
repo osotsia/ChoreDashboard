@@ -1,4 +1,4 @@
-// Sources/Views/RightColumn/BacklogListView.swift
+// --- File: Sources/Views/RightColumn/BacklogListView.swift ---
 import SwiftUI
 
 public struct BacklogListView: View {
@@ -75,7 +75,7 @@ public struct BacklogListView: View {
                             Button {
                                 onEditFocusJob(job)
                             } label: {
-                                Label("Edit Task", systemImage: "pencil")
+                                Label("Edit", systemImage: "pencil")
                             }
                         }
                     }
@@ -126,7 +126,7 @@ public struct BacklogListView: View {
                             Button {
                                 onEditUpcomingEvent(event)
                             } label: {
-                                Label("Edit Event", systemImage: "pencil")
+                                Label("Edit", systemImage: "pencil")
                             }
                         }
                     }
@@ -180,7 +180,7 @@ public struct BacklogListView: View {
                             Button {
                                 onEditBaselineTask(task)
                             } label: {
-                                Label("Edit Task", systemImage: "pencil")
+                                Label("Edit", systemImage: "pencil")
                             }
                         }
                     }
@@ -198,9 +198,7 @@ public struct BacklogListView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 6 * s) {
             HStack {
-                Text(title)
-                    .font(.system(size: 10 * s, weight: .bold))
-                    .tracking(1.5 * s)
+                SectionBadge(text: title)
                     .foregroundColor(.black)
 
                 Spacer()

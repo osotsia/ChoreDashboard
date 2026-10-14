@@ -1,7 +1,7 @@
+// --- File: Sources/App/ChoreDashboardApp.swift ---
 import SwiftUI
 import AppKit
 
-// MARK: - Native Window Aspect-Ratio Lock (Deterministic Lifecycle)
 private final class AspectLockView: NSView {
     var ratio: CGSize = .zero
 
@@ -33,8 +33,8 @@ struct ChoreDashboardApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        // --- 1. Main Dashboard Window ---
-        WindowGroup(id: "dashboard") {
+        // Single distinct main window prevents duplicate window instances
+        Window("Chore Dashboard", id: "dashboard") {
             DashboardView(store: store)
                 .background(WindowAspectLock(ratio: AppConfig.aspectRatio))
                 .frame(
@@ -45,7 +45,6 @@ struct ChoreDashboardApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
 
-        // --- 2. Persistent macOS Menu Bar Item ---
         MenuBarExtra("Chore Dashboard", systemImage: "checklist") {
             Button("Show Dashboard") {
                 NSApp.activate(ignoringOtherApps: true)
@@ -53,7 +52,7 @@ struct ChoreDashboardApp: App {
             }
             Divider()
             Text("Daily Baseline: \(store.state.baselineTasks.filter { !$0.isCompleted }.count) Left")
-            Text("Scheduled Focus: \(store.state.focusJobs.count) Active Jobs")
+            Text("Scheduled Focus: \(store.state.focusJobs.filter { !$0.isCompleted }.count) Active Jobs")
             Divider()
             Button("Reset Daily Baseline") {
                 store.resetDailyBaseline()

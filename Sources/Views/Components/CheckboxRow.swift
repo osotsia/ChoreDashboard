@@ -46,7 +46,7 @@ public struct CheckboxRow: View {
         .contextMenu {
             if let onEdit = onEdit {
                 Button(action: onEdit) {
-                    Label("Edit Baseline Task", systemImage: "pencil")
+                    Label("Edit", systemImage: "pencil")
                 }
             }
         }

@@ -1,4 +1,4 @@
-// Sources/Views/LeftColumn/PrimaryFocusView.swift
+// --- File: Sources/Views/LeftColumn/PrimaryFocusView.swift ---
 import SwiftUI
 
 public struct PrimaryFocusView: View {
@@ -39,22 +39,26 @@ public struct PrimaryFocusView: View {
                 .foregroundColor(Color.white.opacity(0.8))
                 .padding(.bottom, 14 * s)
 
-            LazyVGrid(columns: threeColumns, spacing: 10 * s) {
-                ForEach(store.state.focusJobs) { job in
-                    let isEditingThis = store.editingTarget?.id == job.id
-                    FocusJobTile(
-                        job: job,
-                        isHighlighted: isEditingThis,
-                        onToggle: {
-                            store.toggleFocusJob(id: job.id)
-                        },
-                        onEdit: {
-                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                store.startEditing(focusJob: job)
+            // Dynamic scroll container eliminates visual clipping past 6 tasks
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVGrid(columns: threeColumns, spacing: 10 * s) {
+                    ForEach(store.state.focusJobs) { job in
+                        let isEditingThis = store.editingTarget?.id == job.id
+                        FocusJobTile(
+                            job: job,
+                            isHighlighted: isEditingThis,
+                            onToggle: {
+                                store.toggleFocusJob(id: job.id)
+                            },
+                            onEdit: {
+                                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                                    store.startEditing(focusJob: job)
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
+                .padding(.vertical, 2 * s)
             }
 
             Spacer(minLength: 8 * s)

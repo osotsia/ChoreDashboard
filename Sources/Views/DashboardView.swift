@@ -1,4 +1,4 @@
-// Sources/Views/DashboardView.swift
+// --- File: Sources/Views/DashboardView.swift ---
 import SwiftUI
 
 private struct LeftColumnAdaptiveLayout: Layout {
@@ -60,7 +60,7 @@ public struct DashboardView: View {
                     height: geometry.size.height
                 )
 
-                // RIGHT COLUMN: 35% DECK (Create, Edit, Upcoming, Backlog, History)
+                // RIGHT COLUMN: 35% DECK
                 VStack(spacing: 0) {
                     ZStack {
                         switch store.activeRightTab {
@@ -76,12 +76,7 @@ public struct DashboardView: View {
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
-                            .transition(
-                                .asymmetric(
-                                    insertion: .move(edge: .leading).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)
-                                )
-                            )
+                            .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
 
                         case .edit:
                             if let target = store.editingTarget {
@@ -96,12 +91,7 @@ public struct DashboardView: View {
                                     }
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .move(edge: .leading).combined(with: .opacity),
-                                        removal: .move(edge: .leading).combined(with: .opacity)
-                                    )
-                                )
+                                .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
                             }
 
                         case .upcoming:
@@ -124,12 +114,7 @@ public struct DashboardView: View {
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
-                            .transition(
-                                .asymmetric(
-                                    insertion: .move(edge: .leading).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)
-                                )
-                            )
+                            .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
 
                         case .backlog:
                             VStack(spacing: 0) {
@@ -163,12 +148,7 @@ public struct DashboardView: View {
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
-                            .transition(
-                                .asymmetric(
-                                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .trailing).combined(with: .opacity)
-                                )
-                            )
+                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .trailing).combined(with: .opacity)))
 
                         case .history:
                             VStack(spacing: 0) {
@@ -182,12 +162,7 @@ public struct DashboardView: View {
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
-                            .transition(
-                                .asymmetric(
-                                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .trailing).combined(with: .opacity)
-                                )
-                            )
+                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .trailing).combined(with: .opacity)))
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

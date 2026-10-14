@@ -1,4 +1,4 @@
-// Sources/Store/PreviewData.swift
+// --- File: Sources/Store/PreviewData.swift ---
 import Foundation
 
 public enum PreviewData {
@@ -18,6 +18,9 @@ public enum PreviewData {
         let bottlesId   = UUID()
         let brewingId   = UUID()
         let sinkId      = UUID()
+        let stretchId   = UUID()
+        let meditateId  = UUID()
+        let dishesId    = UUID()
 
         return DashboardState(
             focusOverline: "SCHEDULED OPERATIONS",
@@ -29,13 +32,15 @@ public enum PreviewData {
                     id: kitchenId,
                     tag: "KITCHEN",
                     title: "Deep clean countertops",
-                    notes: "Clear surfaces and wipe with food-safe sanitizer."
+                    notes: "Clear surfaces and wipe with food-safe sanitizer.",
+                    isOverdue: false
                 ),
                 FocusJob(
                     id: floorsId,
                     tag: "FLOORS",
                     title: "Scrub floors & crevices",
-                    notes: ""
+                    notes: "",
+                    isOverdue: true
                 ),
                 FocusJob(
                     id: fridgeId,
@@ -63,53 +68,49 @@ public enum PreviewData {
                 )
             ],
             baselineTitle: "Daily Baseline",
-            baselineSubtitle: "Est: 25 min · Daily maintenance",
+            baselineSubtitle: "Est: 31 min · Daily maintenance",
             baselineRule: "RULE: Complete before noon.",
             baselineTasks: [
-                ChoreItem(title: "Stretch", durationMinutes: 10, tag: "Body"),
-                ChoreItem(title: "13-minute meditation", durationMinutes: 13, tag: "Mind"),
-                ChoreItem(title: "Wash dishes", durationMinutes: 8, tag: "Kitchen")
+                ChoreItem(id: stretchId, title: "Stretch", durationMinutes: 10, tag: "BODY"),
+                ChoreItem(id: meditateId, title: "13-minute meditation", durationMinutes: 13, tag: "MIND"),
+                ChoreItem(id: dishesId, title: "Wash dishes", durationMinutes: 8, tag: "KITCHEN")
             ],
             upcomingEvents: [
                 HorizonEvent(
-                    tag: "Plants · Thu, Oct 15",
+                    tag: "PLANTS",
                     title: "Water flowers",
                     notes: "Check soil and water indoor pots.",
                     timeAnchor: "In 2 Days"
                 ),
                 HorizonEvent(
-                    tag: "Waste · Fri, Oct 16",
+                    tag: "WASTE",
                     title: "Kitchen trash",
                     notes: "Empty can and replace liner.",
                     timeAnchor: "In 3 Days"
                 ),
                 HorizonEvent(
-                    tag: "Floors · Wed, Oct 25",
+                    tag: "FLOORS",
                     title: "Basic vacuuming",
                     notes: "Vacuum living room and main walkways.",
                     timeAnchor: "In 12 Days"
                 ),
                 HorizonEvent(
-                    tag: "Storage · Sun, Nov 10",
+                    tag: "STORAGE",
                     title: "Tidy up boxes",
                     notes: "Break down cardboard and recycle.",
                     timeAnchor: "In 28 Days"
                 ),
                 HorizonEvent(
-                    tag: "Bath · Sun, Nov 10",
+                    tag: "BATH",
                     title: "Clean bathtub",
                     notes: "Scrub tub basin and wipe fixtures.",
                     timeAnchor: "In 28 Days"
                 )
             ],
-            telemetryMetrics: [],
-            // History audit entries (Spread over 7 days):
-            // "Deep clean countertops" -> 3 entries
-            // "Sanitize sink & drain" -> 2 entries
-            // "Scrub floors & crevices" -> 1 entry
-            // "Wash kombucha bottles" -> 1 entry
-            // "Deep clean refrigerator" -> 0 entries (no data)
-            // "Prep kombucha batch" -> 0 entries (no data)
+            telemetryMetrics: [
+                TelemetryMetric(label: "CYCLE HEALTH", status: "NOMINAL"),
+                TelemetryMetric(label: "QUEUE LATENCY", status: "< 24H")
+            ],
             historyRecords: [
                 HistoryRecord(
                     jobId: kitchenId,
@@ -126,6 +127,7 @@ public enum PreviewData {
                     note: "Enzyme treatment down main drain."
                 ),
                 HistoryRecord(
+                    jobId: dishesId,
                     title: "Wash dishes",
                     tag: "KITCHEN",
                     completedAt: relativeDate(daysAgo: 1, hour: 12, minute: 30),
@@ -166,7 +168,8 @@ public enum PreviewData {
                     completedAt: relativeDate(daysAgo: 6, hour: 8, minute: 45),
                     note: "Weekly deep surface scrub."
                 )
-            ]
+            ],
+            customTags: ["KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING", "PANTRY", "BREWING", "BODY", "MIND", "PLANTS", "WASTE", "STORAGE", "BATH"]
         )
     }()
 }

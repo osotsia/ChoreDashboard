@@ -1,9 +1,21 @@
-// Sources/Views/RightColumn/HistoryTimelineView.swift
+// --- File: Sources/Views/RightColumn/HistoryTimelineView.swift ---
 import SwiftUI
 
 public struct HistoryTimelineView: View {
     public var records: [HistoryRecord]
     @Environment(\.scaleFactor) private var s
+
+    private static let dayDateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "EEE, MMM d"
+        return df
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "h:mm a"
+        return df
+    }()
 
     public init(records: [HistoryRecord]) {
         self.records = records
@@ -25,21 +37,15 @@ public struct HistoryTimelineView: View {
         let sortedDayKeys = dict.keys.sorted(by: >)
         let nowStartOfDay = cal.startOfDay(for: Date())
 
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "EEE, MMM d"
-
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "h:mm a"
-
         return sortedDayKeys.map { dayDate in
             let dayOffset = cal.dateComponents([.day], from: dayDate, to: nowStartOfDay).day ?? 0
             let headerText: String
             if dayOffset == 0 {
-                headerText = "TODAY · \(dateFormatter.string(from: dayDate).uppercased())"
+                headerText = "TODAY · \(Self.dayDateFormatter.string(from: dayDate).uppercased())"
             } else if dayOffset == 1 {
-                headerText = "YESTERDAY · \(dateFormatter.string(from: dayDate).uppercased())"
+                headerText = "YESTERDAY · \(Self.dayDateFormatter.string(from: dayDate).uppercased())"
             } else {
-                headerText = "\(dayOffset) DAYS AGO · \(dateFormatter.string(from: dayDate).uppercased())"
+                headerText = "\(dayOffset) DAYS AGO · \(Self.dayDateFormatter.string(from: dayDate).uppercased())"
             }
 
             return DayGroup(
@@ -51,9 +57,7 @@ public struct HistoryTimelineView: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date).uppercased()
+        Self.timeFormatter.string(from: date).uppercased()
     }
 
     public var body: some View {
@@ -73,7 +77,6 @@ public struct HistoryTimelineView: View {
             } else {
                 ForEach(groupedDays) { group in
                     VStack(alignment: .leading, spacing: 6 * s) {
-                        // Date Section Header
                         HStack {
                             Text(group.title)
                                 .font(.system(size: 10 * s, weight: .bold))
@@ -92,7 +95,6 @@ public struct HistoryTimelineView: View {
                         .background(AppConfig.Colors.headerGrey.opacity(0.35))
                         .border(AppConfig.Colors.lineGrey, width: 1 * s)
 
-                        // Chronological Log Items
                         ForEach(group.records) { record in
                             VStack(alignment: .leading, spacing: 3 * s) {
                                 HStack {
