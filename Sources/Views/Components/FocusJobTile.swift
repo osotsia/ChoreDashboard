@@ -3,7 +3,9 @@ import SwiftUI
 
 public struct FocusJobTile: View {
     public let job: FocusJob
+    public var isHighlighted: Bool = false
     public var onToggle: () -> Void
+    public var onEdit: (() -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
     private var hasSubtitleComment: Bool {
@@ -12,7 +14,7 @@ public struct FocusJobTile: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header Row: System Tag + State-Aware Checkbox Target
+            // Header Row: System Tag + Checkbox
             HStack(alignment: .center) {
                 Text(job.tag.uppercased())
                     .font(.system(size: 10 * s, weight: .bold))
@@ -68,13 +70,24 @@ public struct FocusJobTile: View {
         }
         .padding(14 * s)
         .frame(maxWidth: .infinity, minHeight: 120 * s, alignment: .topLeading)
-        .background(job.isCompleted ? AppConfig.Colors.tileBackground.opacity(0.5) : AppConfig.Colors.tileBackground)
+        .background(
+            isHighlighted
+                ? Color.white.opacity(0.12)
+                : (job.isCompleted ? AppConfig.Colors.tileBackground.opacity(0.5) : AppConfig.Colors.tileBackground)
+        )
         .overlay(
             Rectangle()
                 .strokeBorder(
-                    job.isCompleted ? Color.white.opacity(0.1) : Color.white.opacity(0.2),
-                    lineWidth: 1 * s
+                    isHighlighted ? Color.white : (job.isCompleted ? Color.white.opacity(0.1) : Color.white.opacity(0.2)),
+                    lineWidth: isHighlighted ? 1.5 * s : 1 * s
                 )
         )
+        .contextMenu {
+            if let onEdit = onEdit {
+                Button(action: onEdit) {
+                    Label("Edit Operation", systemImage: "pencil")
+                }
+            }
+        }
     }
 }

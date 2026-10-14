@@ -1,3 +1,4 @@
+// Sources/Views/LeftColumn/BaselineResetView.swift
 import SwiftUI
 
 public struct BaselineResetView: View {
@@ -5,13 +6,20 @@ public struct BaselineResetView: View {
     @Environment(\.scaleFactor) private var s
 
     private var taskList: some View {
-        VStack(spacing: 10 * s) {
+        VStack(spacing: 8 * s) {
             ForEach(store.state.baselineTasks) { item in
+                let isEditingThis = store.editingTarget?.id == item.id
                 CheckboxRow(
                     title: item.title,
                     tag: item.tag,
                     isCompleted: item.isCompleted,
-                    onToggle: { store.toggleBaselineTask(id: item.id) }
+                    isHighlighted: isEditingThis,
+                    onToggle: { store.toggleBaselineTask(id: item.id) },
+                    onEdit: {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                            store.startEditing(baselineTask: item)
+                        }
+                    }
                 )
             }
         }

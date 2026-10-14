@@ -77,7 +77,6 @@ public struct CreateTaskView: View {
     private func commitTask() {
         guard isValid else { return }
 
-        // If user typed custom tag without hitting Enter/ADD, register it now
         if isCreatingCustomTag && !customTagText.isEmpty {
             confirmCustomTag()
         }
@@ -98,7 +97,7 @@ public struct CreateTaskView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 18 * s) {
+        VStack(alignment: .leading, spacing: 16 * s) {
             // =================================================================
             // 1. TASK TITLE
             // =================================================================
@@ -122,7 +121,7 @@ public struct CreateTaskView: View {
             }
 
             // =================================================================
-            // 2. SYSTEM TAG REGISTRY (Sanitized Chips + Inline Confirm)
+            // 2. SYSTEM TAG REGISTRY (Chips + Inline Custom Confirm)
             // =================================================================
             VStack(alignment: .leading, spacing: 6 * s) {
                 Text("SYSTEM TAG")
@@ -157,7 +156,6 @@ public struct CreateTaskView: View {
                         .buttonStyle(.plain)
                     }
 
-                    // "+ Custom" Button
                     Button(action: {
                         isCreatingCustomTag = true
                     }) {
@@ -227,7 +225,7 @@ public struct CreateTaskView: View {
             }
 
             // =================================================================
-            // 3. RECURRENCE CADENCE (Ergonomic Dual Pod Stepper)
+            // 3. RECURRENCE CADENCE (Dual Pod Steppers)
             // =================================================================
             VStack(alignment: .leading, spacing: 8 * s) {
                 HStack {
@@ -238,7 +236,6 @@ public struct CreateTaskView: View {
 
                     Spacer()
 
-                    // Recurrence vs One-Time Segment
                     HStack(spacing: 2 * s) {
                         CadenceTypeTab(title: "RECURRING", isSelected: !isOneTime, s: s) {
                             isOneTime = false
@@ -254,7 +251,7 @@ public struct CreateTaskView: View {
 
                 if !isOneTime {
                     HStack(spacing: 10 * s) {
-                        // Pod 1: Quantity Stepper
+                        // Count Stepper Pod
                         HStack(spacing: 0) {
                             Button(action: {
                                 if repeatCount > 1 { repeatCount -= 1 }
@@ -267,15 +264,13 @@ public struct CreateTaskView: View {
                             }
                             .buttonStyle(SubtlePressStyle())
 
-                            Divider()
-                                .frame(height: 20 * s)
+                            Divider().frame(height: 20 * s)
 
                             Text("\(repeatCount)")
                                 .font(.system(size: 18 * s, weight: .black, design: .monospaced))
                                 .frame(maxWidth: .infinity)
 
-                            Divider()
-                                .frame(height: 20 * s)
+                            Divider().frame(height: 20 * s)
 
                             Button(action: {
                                 repeatCount += 1
@@ -295,7 +290,7 @@ public struct CreateTaskView: View {
                                 .strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s)
                         )
 
-                        // Pod 2: Unit Stepper (Day <-> Week <-> Month <-> Year)
+                        // Unit Stepper Pod
                         HStack(spacing: 0) {
                             Button(action: {
                                 repeatUnit = repeatUnit.previous()
@@ -308,16 +303,14 @@ public struct CreateTaskView: View {
                             }
                             .buttonStyle(SubtlePressStyle())
 
-                            Divider()
-                                .frame(height: 20 * s)
+                            Divider().frame(height: 20 * s)
 
                             Text(repeatUnit.displayString(count: repeatCount).uppercased())
                                 .font(.system(size: 12 * s, weight: .bold))
                                 .tracking(0.6 * s)
                                 .frame(maxWidth: .infinity)
 
-                            Divider()
-                                .frame(height: 20 * s)
+                            Divider().frame(height: 20 * s)
 
                             Button(action: {
                                 repeatUnit = repeatUnit.next()
@@ -359,7 +352,7 @@ public struct CreateTaskView: View {
             }
 
             // =================================================================
-            // 4. CURRENT OPERATIONAL STATUS
+            // 4. CURRENT STATUS & RUNWAY GAUGE
             // =================================================================
             VStack(alignment: .leading, spacing: 8 * s) {
                 Text("CURRENT OPERATIONAL STATUS")
@@ -371,7 +364,9 @@ public struct CreateTaskView: View {
                     ForEach(TaskHealthState.allCases, id: \.self) { state in
                         let isSelected = selectedState == state
                         Button(action: {
-                            selectedState = state
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                selectedState = state
+                            }
                         }) {
                             VStack(spacing: 2 * s) {
                                 Text(state.rawValue)
@@ -384,23 +379,26 @@ public struct CreateTaskView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 40 * s)
-                            .background(isSelected ? Color.black : Color.white)
+                            .background(isSelected ? (state == .overdue ? Color.red : Color.black) : Color.white)
                             .foregroundColor(isSelected ? .white : Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 6 * s))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6 * s)
-                                    .strokeBorder(isSelected ? Color.black : Color.black.opacity(0.15), lineWidth: 1 * s)
+                                    .strokeBorder(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1 * s)
                             )
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
-                // Estimated Routing Summary Banner
+                // Health Runway Progress Bar Graphic
+                HealthRunwayGauge(state: selectedState, s: s)
+
+                // Routing Explanation
                 HStack(alignment: .center, spacing: 8 * s) {
                     Image(systemName: routingInfo.icon)
                         .font(.system(size: 11 * s, weight: .bold))
-                        .foregroundColor(routingInfo.isImmediate ? Color.black : AppConfig.Colors.subtextGrey)
+                        .foregroundColor(routingInfo.isImmediate ? (selectedState == .overdue ? .red : Color.black) : AppConfig.Colors.subtextGrey)
 
                     Text(routingInfo.text)
                         .font(.system(size: 10.5 * s, weight: .medium))
@@ -415,7 +413,7 @@ public struct CreateTaskView: View {
             }
 
             // =================================================================
-            // 5. RUN NOTES / SPECS (Optional)
+            // 5. RUN NOTES / SPECS
             // =================================================================
             VStack(alignment: .leading, spacing: 6 * s) {
                 Text("OPERATIONAL CONTEXT / NOTES (OPTIONAL)")
@@ -483,7 +481,80 @@ public struct CreateTaskView: View {
     }
 }
 
-// MARK: - Subcomponents & Styles
+// MARK: - Animated Health Runway Gauge
+public struct HealthRunwayGauge: View {
+    public let state: TaskHealthState
+    public let s: CGFloat
+
+    public init(state: TaskHealthState, s: CGFloat) {
+        self.state = state
+        self.s = s
+    }
+
+    private var progress: Double {
+        switch state {
+        case .good:    return 0.90
+        case .notYet:  return 0.55
+        case .due:     return 0.20
+        case .overdue: return 0.05
+        }
+    }
+
+    private var runwayLabel: String {
+        switch state {
+        case .good:    return "RUNWAY: 90% (HEALTHY BUFFER)"
+        case .notYet:  return "RUNWAY: 55% (MID-CYCLE)"
+        case .due:     return "RUNWAY: 20% (CYCLE EXHAUSTED)"
+        case .overdue: return "RUNWAY: 5% (OVERDUE HAZARD)"
+        }
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 4 * s) {
+            HStack {
+                Text(runwayLabel)
+                    .font(.system(size: 8.5 * s, weight: .black, design: .monospaced))
+                    .tracking(0.8 * s)
+                    .foregroundColor(state == .overdue ? .red : AppConfig.Colors.subtextGrey)
+
+                Spacer()
+
+                if state == .overdue {
+                    HStack(spacing: 3 * s) {
+                        Image(systemName: "radiation")
+                            .font(.system(size: 11 * s, weight: .black))
+                            .foregroundColor(.red)
+                        Text("DECAY HAZARD")
+                            .font(.system(size: 8 * s, weight: .black))
+                            .foregroundColor(.red)
+                    }
+                    .transition(.opacity.combined(with: .scale))
+                }
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3.5 * s)
+                        .fill(Color.black.opacity(0.08))
+                        .frame(height: 7 * s)
+
+                    RoundedRectangle(cornerRadius: 3.5 * s)
+                        .fill(
+                            state == .overdue
+                                ? Color.red
+                                : (state == .due ? Color.black : Color.black.opacity(0.85))
+                        )
+                        .frame(width: max(8 * s, geo.size.width * progress), height: 7 * s)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: progress)
+                }
+            }
+            .frame(height: 7 * s)
+        }
+        .padding(.vertical, 2 * s)
+    }
+}
+
+// MARK: - Reusable Styles
 private struct CadenceTypeTab: View {
     let title: String
     let isSelected: Bool

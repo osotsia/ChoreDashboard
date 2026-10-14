@@ -13,7 +13,6 @@ public struct PrimaryFocusView: View {
         ]
 
         VStack(alignment: .leading, spacing: 0) {
-            // Header
             HStack {
                 Text(store.state.focusOverline.uppercased())
                     .font(.system(size: 11 * s, weight: .bold))
@@ -30,30 +29,36 @@ public struct PrimaryFocusView: View {
             }
             .padding(.bottom, 6 * s)
 
-            // Primary Title
             Text(store.state.focusTitle)
                 .font(.system(size: 24 * s, weight: .bold))
                 .foregroundColor(.white)
                 .padding(.bottom, 4 * s)
 
-            // Subtitle
             Text(store.state.focusSubtitle)
                 .font(.system(size: 13 * s, weight: .regular))
                 .foregroundColor(Color.white.opacity(0.8))
                 .padding(.bottom, 14 * s)
 
-            // 3-Column Modern UI Tile Grid
             LazyVGrid(columns: threeColumns, spacing: 10 * s) {
                 ForEach(store.state.focusJobs) { job in
-                    FocusJobTile(job: job) {
-                        store.toggleFocusJob(id: job.id)
-                    }
+                    let isEditingThis = store.editingTarget?.id == job.id
+                    FocusJobTile(
+                        job: job,
+                        isHighlighted: isEditingThis,
+                        onToggle: {
+                            store.toggleFocusJob(id: job.id)
+                        },
+                        onEdit: {
+                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                                store.startEditing(focusJob: job)
+                            }
+                        }
+                    )
                 }
             }
 
             Spacer(minLength: 8 * s)
 
-            // Divider & Tools Footer
             Rectangle()
                 .fill(Color.white.opacity(0.2))
                 .frame(height: 1 * s)

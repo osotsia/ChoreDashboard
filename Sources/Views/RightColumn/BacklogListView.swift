@@ -1,31 +1,40 @@
+// Sources/Views/RightColumn/BacklogListView.swift
 import SwiftUI
 
 public struct BacklogListView: View {
     public var focusJobs: [FocusJob]
     public var upcomingEvents: [HorizonEvent]
     public var baselineTasks: [ChoreItem]
+    public var highlightedId: UUID? = nil
+    public var onEditFocusJob: ((FocusJob) -> Void)? = nil
+    public var onEditBaselineTask: ((ChoreItem) -> Void)? = nil
+    public var onEditUpcomingEvent: ((HorizonEvent) -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
     public init(
         focusJobs: [FocusJob],
         upcomingEvents: [HorizonEvent],
-        baselineTasks: [ChoreItem]
+        baselineTasks: [ChoreItem],
+        highlightedId: UUID? = nil,
+        onEditFocusJob: ((FocusJob) -> Void)? = nil,
+        onEditBaselineTask: ((ChoreItem) -> Void)? = nil,
+        onEditUpcomingEvent: ((HorizonEvent) -> Void)? = nil
     ) {
         self.focusJobs = focusJobs
         self.upcomingEvents = upcomingEvents
         self.baselineTasks = baselineTasks
+        self.highlightedId = highlightedId
+        self.onEditFocusJob = onEditFocusJob
+        self.onEditBaselineTask = onEditBaselineTask
+        self.onEditUpcomingEvent = onEditUpcomingEvent
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 20 * s) {
-            // =========================================================
-            // SECTION 1: MAIN TASKS (Targeted Focus Operations)
-            // =========================================================
-            sectionBlock(
-                title: "01 · MAIN TASKS",
-                count: focusJobs.count
-            ) {
+            // SECTION 1: MAIN TASKS
+            sectionBlock(title: "01 · MAIN TASKS", count: focusJobs.count) {
                 ForEach(focusJobs) { job in
+                    let isEditing = highlightedId == job.id
                     VStack(alignment: .leading, spacing: 3 * s) {
                         HStack {
                             Text(job.tag.uppercased())
@@ -57,17 +66,26 @@ public struct BacklogListView: View {
                             .padding(.top, 6 * s)
                     }
                     .padding(.vertical, 4 * s)
+                    .padding(.horizontal, 6 * s)
+                    .background(isEditing ? Color.black.opacity(0.08) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 4 * s))
+                    .contentShape(Rectangle())
+                    .contextMenu {
+                        if let onEditFocusJob = onEditFocusJob {
+                            Button {
+                                onEditFocusJob(job)
+                            } label: {
+                                Label("Edit Task", systemImage: "pencil")
+                            }
+                        }
+                    }
                 }
             }
 
-            // =========================================================
-            // SECTION 2: UPCOMING HORIZON (Cadence Schedule)
-            // =========================================================
-            sectionBlock(
-                title: "02 · UPCOMING HORIZON",
-                count: upcomingEvents.count
-            ) {
+            // SECTION 2: UPCOMING HORIZON
+            sectionBlock(title: "02 · UPCOMING HORIZON", count: upcomingEvents.count) {
                 ForEach(upcomingEvents) { event in
+                    let isEditing = highlightedId == event.id
                     VStack(alignment: .leading, spacing: 3 * s) {
                         HStack {
                             Text(event.tag.uppercased())
@@ -99,17 +117,26 @@ public struct BacklogListView: View {
                             .padding(.top, 6 * s)
                     }
                     .padding(.vertical, 4 * s)
+                    .padding(.horizontal, 6 * s)
+                    .background(isEditing ? Color.black.opacity(0.08) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 4 * s))
+                    .contentShape(Rectangle())
+                    .contextMenu {
+                        if let onEditUpcomingEvent = onEditUpcomingEvent {
+                            Button {
+                                onEditUpcomingEvent(event)
+                            } label: {
+                                Label("Edit Event", systemImage: "pencil")
+                            }
+                        }
+                    }
                 }
             }
 
-            // =========================================================
-            // SECTION 3: DAILY BASELINE (Continuous Maintenance)
-            // =========================================================
-            sectionBlock(
-                title: "03 · DAILY BASELINE",
-                count: baselineTasks.count
-            ) {
+            // SECTION 3: DAILY BASELINE
+            sectionBlock(title: "03 · DAILY BASELINE", count: baselineTasks.count) {
                 ForEach(baselineTasks) { task in
+                    let isEditing = highlightedId == task.id
                     VStack(alignment: .leading, spacing: 3 * s) {
                         HStack {
                             Text(task.tag.uppercased())
@@ -144,13 +171,25 @@ public struct BacklogListView: View {
                             .padding(.top, 6 * s)
                     }
                     .padding(.vertical, 4 * s)
+                    .padding(.horizontal, 6 * s)
+                    .background(isEditing ? Color.black.opacity(0.08) : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 4 * s))
+                    .contentShape(Rectangle())
+                    .contextMenu {
+                        if let onEditBaselineTask = onEditBaselineTask {
+                            Button {
+                                onEditBaselineTask(task)
+                            } label: {
+                                Label("Edit Task", systemImage: "pencil")
+                            }
+                        }
+                    }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Tactical Section Header Block
     @ViewBuilder
     private func sectionBlock<Content: View>(
         title: String,

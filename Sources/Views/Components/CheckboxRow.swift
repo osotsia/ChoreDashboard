@@ -4,7 +4,9 @@ public struct CheckboxRow: View {
     public let title: String
     public let tag: String
     public var isCompleted: Bool
+    public var isHighlighted: Bool = false
     public let onToggle: () -> Void
+    public var onEdit: (() -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
     public var body: some View {
@@ -34,8 +36,19 @@ public struct CheckboxRow: View {
                     .font(.system(size: 13 * s, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
             }
+            .padding(.horizontal, 6 * s)
+            .padding(.vertical, 4 * s)
+            .background(isHighlighted ? Color.white.opacity(0.15) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 4 * s))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if let onEdit = onEdit {
+                Button(action: onEdit) {
+                    Label("Edit Baseline Task", systemImage: "pencil")
+                }
+            }
+        }
     }
 }

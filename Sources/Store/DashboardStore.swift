@@ -9,6 +9,35 @@ public enum RightPanelTab: String, Codable {
     case backlog
     case history
     case create
+    case edit
+}
+
+// MARK: - Polymorphic Edit Target
+public enum EditableTaskTarget: Identifiable, Equatable {
+    case focus(FocusJob)
+    case baseline(ChoreItem)
+    case horizon(HorizonEvent)
+
+    public var id: UUID {
+        switch self {
+        case .focus(let j): return j.id
+        case .baseline(let c): return c.id
+        case .horizon(let h): return h.id
+        }
+    }
+
+    public static func == (lhs: EditableTaskTarget, rhs: EditableTaskTarget) -> Bool {
+        switch (lhs, rhs) {
+        case (.focus(let a), .focus(let b)):
+            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.notes == b.notes && a.isCompleted == b.isCompleted
+        case (.baseline(let a), .baseline(let b)):
+            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.durationMinutes == b.durationMinutes && a.isCompleted == b.isCompleted
+        case (.horizon(let a), .horizon(let b)):
+            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.notes == b.notes && a.timeAnchor == b.timeAnchor
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - Cadence & Health Domain Enums
@@ -145,13 +174,13 @@ public final class DashboardStore {
     public var state: DashboardState
     public var activeRightTab: RightPanelTab = .upcoming
     public private(set) var previousRightTab: RightPanelTab = .upcoming
+    public var editingTarget: EditableTaskTarget? = nil
 
     public var isShowingBacklog: Bool {
         get { activeRightTab == .backlog }
         set { selectRightTab(newValue ? .backlog : .upcoming) }
     }
 
-    // Dynamic tag aggregation across active state AND persisted custom tags
     public var availableTags: [String] {
         var tags = Set<String>()
 
@@ -220,7 +249,7 @@ public final class DashboardStore {
     public func selectRightTab(_ tab: RightPanelTab) {
         guard tab != activeRightTab else { return }
 
-        if activeRightTab != .create {
+        if activeRightTab != .create && activeRightTab != .edit {
             previousRightTab = activeRightTab
         }
         activeRightTab = tab
@@ -230,8 +259,100 @@ public final class DashboardStore {
         activeRightTab = previousRightTab
     }
 
+    public func dismissEditTask() {
+        editingTarget = nil
+        activeRightTab = previousRightTab
+    }
+
     public func toggleBacklog() {
         selectRightTab(activeRightTab == .backlog ? .upcoming : .backlog)
+    }
+
+    // MARK: - Edit Workflow Activation
+    public func startEditing(focusJob: FocusJob) {
+        editingTarget = .focus(focusJob)
+        selectRightTab(.edit)
+    }
+
+    public func startEditing(baselineTask: ChoreItem) {
+        editingTarget = .baseline(baselineTask)
+        selectRightTab(.edit)
+    }
+
+    public func startEditing(upcomingEvent: HorizonEvent) {
+        editingTarget = .horizon(upcomingEvent)
+        selectRightTab(.edit)
+    }
+
+    // MARK: - In-Place Task Modification with Migration
+    public func applyEditedTask(
+        target: EditableTaskTarget,
+        title: String,
+        tag: String,
+        notes: String,
+        isOneTime: Bool,
+        repeatCount: Int,
+        repeatUnit: CadenceUnit,
+        healthState: TaskHealthState
+    ) {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        addCustomTag(cleanTag)
+
+        // Remove old entry from its source container
+        switch target {
+        case .focus(let job):
+            state.focusJobs.removeAll(where: { $0.id == job.id })
+        case .baseline(let task):
+            state.baselineTasks.removeAll(where: { $0.id == task.id })
+        case .horizon(let event):
+            state.upcomingEvents.removeAll(where: { $0.id == event.id })
+        }
+
+        // Re-dispatch into the appropriate container based on the updated state
+        if healthState == .due || healthState == .overdue {
+            if !isOneTime && repeatUnit == .day && repeatCount == 1 {
+                addBaselineTask(title: cleanTitle, tag: cleanTag, durationMinutes: 15)
+            } else {
+                let notePrefix = (healthState == .overdue) ? "[OVERDUE] " : ""
+                addFocusJob(title: cleanTitle, tag: cleanTag, notes: notePrefix + cleanNotes)
+            }
+        } else {
+            let intervalDays = isOneTime ? 7 : repeatUnit.days(count: repeatCount)
+            let daysUntilDue = (healthState == .good) ? max(1, intervalDays) : max(1, intervalDays / 2)
+            let timeAnchor: String
+            if daysUntilDue == 1 {
+                timeAnchor = "In 1 Day"
+            } else if daysUntilDue < 14 {
+                timeAnchor = "In \(daysUntilDue) Days"
+            } else if daysUntilDue < 60 {
+                let weeks = max(1, daysUntilDue / 7)
+                timeAnchor = "In \(weeks) Weeks (\(daysUntilDue)d)"
+            } else {
+                let months = max(1, daysUntilDue / 30)
+                timeAnchor = "In \(months) Months (\(daysUntilDue)d)"
+            }
+
+            addUpcomingEvent(title: cleanTitle, tag: cleanTag, notes: cleanNotes, timeAnchor: timeAnchor)
+        }
+
+        dismissEditTask()
+        persistAsync()
+    }
+
+    public func deleteTask(target: EditableTaskTarget) {
+        switch target {
+        case .focus(let job):
+            state.focusJobs.removeAll(where: { $0.id == job.id })
+        case .baseline(let task):
+            state.baselineTasks.removeAll(where: { $0.id == task.id })
+        case .horizon(let event):
+            state.upcomingEvents.removeAll(where: { $0.id == event.id })
+        }
+        dismissEditTask()
+        persistAsync()
     }
 
     // MARK: - Custom Tag Management
@@ -262,10 +383,8 @@ public final class DashboardStore {
         let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // Ensure custom tag is recorded in permanent registry
         addCustomTag(cleanTag)
 
-        // Case 1: Immediate action -> Dispatches to active operations
         if healthState == .due || healthState == .overdue {
             if !isOneTime && repeatUnit == .day && repeatCount == 1 {
                 addBaselineTask(title: cleanTitle, tag: cleanTag, durationMinutes: 15)
@@ -276,14 +395,8 @@ public final class DashboardStore {
             return
         }
 
-        // Case 2: Healthy or pending -> Calculate upcoming horizon anchor
         let intervalDays = isOneTime ? 7 : repeatUnit.days(count: repeatCount)
-        let daysUntilDue: Int
-        if healthState == .good {
-            daysUntilDue = max(1, intervalDays)
-        } else {
-            daysUntilDue = max(1, intervalDays / 2)
-        }
+        let daysUntilDue = (healthState == .good) ? max(1, intervalDays) : max(1, intervalDays / 2)
 
         let timeAnchor: String
         if daysUntilDue == 1 {
@@ -300,7 +413,6 @@ public final class DashboardStore {
 
         addUpcomingEvent(title: cleanTitle, tag: cleanTag, notes: cleanNotes, timeAnchor: timeAnchor)
 
-        // If registered as "GOOD", log initial completion history entry
         if healthState == .good {
             let record = HistoryRecord(
                 title: cleanTitle,
