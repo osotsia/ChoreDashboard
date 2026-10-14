@@ -1,11 +1,64 @@
+// Sources/Store/DashboardStore.swift
 import SwiftUI
 import Observation
 import CryptoKit
 
+// MARK: - Navigation Modes
 public enum RightPanelTab: String, Codable {
     case upcoming
     case backlog
     case history
+    case create
+}
+
+// MARK: - Cadence & Health Domain Enums
+public enum CadenceUnit: String, CaseIterable, Codable {
+    case day = "Day"
+    case week = "Week"
+    case month = "Month"
+    case year = "Year"
+
+    public func days(count: Int) -> Int {
+        switch self {
+        case .day:   return count
+        case .week:  return count * 7
+        case .month: return count * 30
+        case .year:  return count * 365
+        }
+    }
+
+    public func displayString(count: Int) -> String {
+        if count == 1 { return rawValue }
+        return "\(rawValue)s"
+    }
+
+    public func next() -> CadenceUnit {
+        let all = Self.allCases
+        let idx = all.firstIndex(of: self) ?? 0
+        return all[(idx + 1) % all.count]
+    }
+
+    public func previous() -> CadenceUnit {
+        let all = Self.allCases
+        let idx = all.firstIndex(of: self) ?? 0
+        return all[(idx - 1 + all.count) % all.count]
+    }
+}
+
+public enum TaskHealthState: String, CaseIterable, Codable {
+    case good = "GOOD"
+    case notYet = "NOT YET"
+    case due = "DUE"
+    case overdue = "OVERDUE"
+
+    public var subtitle: String {
+        switch self {
+        case .good:    return "FRESH"
+        case .notYet:  return "RUNNING"
+        case .due:     return "TODAY"
+        case .overdue: return "URGENT"
+        }
+    }
 }
 
 // MARK: - Dedicated Non-Isolated File System Monitor
@@ -69,7 +122,6 @@ private actor StatePersistenceEngine {
             let data = try Data(contentsOf: storageURL)
             let checksum = SHA256.hash(data: data)
 
-            // Echo suppression: Ignore if matching our internal write
             if let last = lastPersistedChecksum, checksum == last {
                 return nil
             }
@@ -92,10 +144,45 @@ private actor StatePersistenceEngine {
 public final class DashboardStore {
     public var state: DashboardState
     public var activeRightTab: RightPanelTab = .upcoming
+    public private(set) var previousRightTab: RightPanelTab = .upcoming
 
     public var isShowingBacklog: Bool {
         get { activeRightTab == .backlog }
-        set { activeRightTab = newValue ? .backlog : .upcoming }
+        set { selectRightTab(newValue ? .backlog : .upcoming) }
+    }
+
+    // Dynamic tag aggregation across active state AND persisted custom tags
+    public var availableTags: [String] {
+        var tags = Set<String>()
+
+        let sanitize: (String) -> String = { raw in
+            let clean = raw.components(separatedBy: CharacterSet(charactersIn: "·-–,"))[0]
+            return clean.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        }
+
+        for tag in state.customTags {
+            let t = sanitize(tag)
+            if !t.isEmpty { tags.insert(t) }
+        }
+        for job in state.focusJobs {
+            let t = sanitize(job.tag)
+            if !t.isEmpty { tags.insert(t) }
+        }
+        for task in state.baselineTasks {
+            let t = sanitize(task.tag)
+            if !t.isEmpty { tags.insert(t) }
+        }
+        for event in state.upcomingEvents {
+            let t = sanitize(event.tag)
+            if !t.isEmpty { tags.insert(t) }
+        }
+        for record in state.historyRecords {
+            let t = sanitize(record.tag)
+            if !t.isEmpty { tags.insert(t) }
+        }
+
+        let sorted = tags.sorted()
+        return sorted.isEmpty ? ["KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING"] : sorted
     }
 
     private var watcher: DirectoryWatcher?
@@ -131,18 +218,142 @@ public final class DashboardStore {
 
     // MARK: - Navigation Control
     public func selectRightTab(_ tab: RightPanelTab) {
+        guard tab != activeRightTab else { return }
+
+        if activeRightTab != .create {
+            previousRightTab = activeRightTab
+        }
         activeRightTab = tab
     }
 
-    public func toggleBacklog() {
-        activeRightTab = (activeRightTab == .backlog) ? .upcoming : .backlog
+    public func dismissCreateTask() {
+        activeRightTab = previousRightTab
     }
 
-    // MARK: - Task Mutations
+    public func toggleBacklog() {
+        selectRightTab(activeRightTab == .backlog ? .upcoming : .backlog)
+    }
+
+    // MARK: - Custom Tag Management
+    public func addCustomTag(_ tag: String) {
+        let clean = tag.components(separatedBy: CharacterSet(charactersIn: "·-–,"))[0]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+
+        guard !clean.isEmpty else { return }
+
+        if !state.customTags.contains(clean) {
+            state.customTags.append(clean)
+            persistAsync()
+        }
+    }
+
+    // MARK: - Intelligent Cadence Dispatch Engine
+    public func dispatchConfiguredTask(
+        title: String,
+        tag: String,
+        notes: String,
+        isOneTime: Bool,
+        repeatCount: Int,
+        repeatUnit: CadenceUnit,
+        healthState: TaskHealthState
+    ) {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Ensure custom tag is recorded in permanent registry
+        addCustomTag(cleanTag)
+
+        // Case 1: Immediate action -> Dispatches to active operations
+        if healthState == .due || healthState == .overdue {
+            if !isOneTime && repeatUnit == .day && repeatCount == 1 {
+                addBaselineTask(title: cleanTitle, tag: cleanTag, durationMinutes: 15)
+            } else {
+                let notePrefix = (healthState == .overdue) ? "[OVERDUE] " : ""
+                addFocusJob(title: cleanTitle, tag: cleanTag, notes: notePrefix + cleanNotes)
+            }
+            return
+        }
+
+        // Case 2: Healthy or pending -> Calculate upcoming horizon anchor
+        let intervalDays = isOneTime ? 7 : repeatUnit.days(count: repeatCount)
+        let daysUntilDue: Int
+        if healthState == .good {
+            daysUntilDue = max(1, intervalDays)
+        } else {
+            daysUntilDue = max(1, intervalDays / 2)
+        }
+
+        let timeAnchor: String
+        if daysUntilDue == 1 {
+            timeAnchor = "In 1 Day"
+        } else if daysUntilDue < 14 {
+            timeAnchor = "In \(daysUntilDue) Days"
+        } else if daysUntilDue < 60 {
+            let weeks = max(1, daysUntilDue / 7)
+            timeAnchor = "In \(weeks) Weeks (\(daysUntilDue)d)"
+        } else {
+            let months = max(1, daysUntilDue / 30)
+            timeAnchor = "In \(months) Months (\(daysUntilDue)d)"
+        }
+
+        addUpcomingEvent(title: cleanTitle, tag: cleanTag, notes: cleanNotes, timeAnchor: timeAnchor)
+
+        // If registered as "GOOD", log initial completion history entry
+        if healthState == .good {
+            let record = HistoryRecord(
+                title: cleanTitle,
+                tag: cleanTag,
+                completedAt: Date(),
+                note: cleanNotes.isEmpty ? "Initial cycle state registered as completed." : cleanNotes
+            )
+            state.historyRecords.insert(record, at: 0)
+        }
+
+        persistAsync()
+    }
+
+    // MARK: - Domain Mutation Primitives
+    public func addFocusJob(title: String, tag: String, notes: String) {
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let job = FocusJob(
+            tag: cleanTag.isEmpty ? "OPERATION" : cleanTag,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            isCompleted: false
+        )
+        state.focusJobs.append(job)
+        persistAsync()
+    }
+
+    public func addBaselineTask(title: String, tag: String, durationMinutes: Int) {
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).capitalized
+        let task = ChoreItem(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            durationMinutes: max(1, durationMinutes),
+            tag: cleanTag.isEmpty ? "General" : cleanTag,
+            isCompleted: false
+        )
+        state.baselineTasks.append(task)
+        persistAsync()
+    }
+
+    public func addUpcomingEvent(title: String, tag: String, notes: String, timeAnchor: String) {
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanAnchor = timeAnchor.trimmingCharacters(in: .whitespacesAndNewlines)
+        let event = HorizonEvent(
+            tag: cleanTag.isEmpty ? "Scheduled" : cleanTag,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            timeAnchor: cleanAnchor.isEmpty ? "Upcoming" : cleanAnchor
+        )
+        state.upcomingEvents.append(event)
+        persistAsync()
+    }
+
     public func toggleFocusJob(id: UUID) {
         guard let idx = state.focusJobs.firstIndex(where: { $0.id == id }) else { return }
-        
-        // Mutate in isolation to prevent exclusivity lock overlaps
         state.focusJobs[idx].isCompleted.toggle()
         let isNowCompleted = state.focusJobs[idx].isCompleted
         let job = state.focusJobs[idx]
@@ -158,8 +369,6 @@ public final class DashboardStore {
 
     public func toggleBaselineTask(id: UUID) {
         guard let idx = state.baselineTasks.firstIndex(where: { $0.id == id }) else { return }
-        
-        // Mutate in isolation to prevent exclusivity lock overlaps
         state.baselineTasks[idx].isCompleted.toggle()
         let isNowCompleted = state.baselineTasks[idx].isCompleted
         let task = state.baselineTasks[idx]
@@ -190,7 +399,6 @@ public final class DashboardStore {
             )
             state.historyRecords.insert(record, at: 0)
         } else {
-            // LIFO Rollback
             if let recordIdx = state.historyRecords.firstIndex(where: { $0.jobId == taskId }) {
                 state.historyRecords.remove(at: recordIdx)
             }

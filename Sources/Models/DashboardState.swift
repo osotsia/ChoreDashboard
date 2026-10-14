@@ -1,3 +1,4 @@
+// Sources/Models/DashboardState.swift
 import Foundation
 
 public struct DashboardState: Codable {
@@ -14,6 +15,7 @@ public struct DashboardState: Codable {
     public var upcomingEvents: [HorizonEvent]
     public var telemetryMetrics: [TelemetryMetric]
     public var historyRecords: [HistoryRecord]
+    public var customTags: [String]
 
     public init(
         schemaVersion: Int = 1,
@@ -28,7 +30,8 @@ public struct DashboardState: Codable {
         baselineTasks: [ChoreItem],
         upcomingEvents: [HorizonEvent],
         telemetryMetrics: [TelemetryMetric] = [],
-        historyRecords: [HistoryRecord] = []
+        historyRecords: [HistoryRecord] = [],
+        customTags: [String] = []
     ) {
         self.schemaVersion = schemaVersion
         self.focusOverline = focusOverline
@@ -43,6 +46,7 @@ public struct DashboardState: Codable {
         self.upcomingEvents = upcomingEvents
         self.telemetryMetrics = telemetryMetrics
         self.historyRecords = historyRecords
+        self.customTags = customTags
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -56,6 +60,7 @@ public struct DashboardState: Codable {
         case baselineTasks
         case upcomingEvents, telemetryMetrics
         case historyRecords
+        case customTags
     }
 
     public init(from decoder: Decoder) throws {
@@ -100,6 +105,7 @@ public struct DashboardState: Codable {
         self.upcomingEvents = try container.decode([HorizonEvent].self, forKey: .upcomingEvents)
         self.telemetryMetrics = try container.decodeIfPresent([TelemetryMetric].self, forKey: .telemetryMetrics) ?? []
         self.historyRecords = try container.decodeIfPresent([HistoryRecord].self, forKey: .historyRecords) ?? []
+        self.customTags = try container.decodeIfPresent([String].self, forKey: .customTags) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -117,5 +123,6 @@ public struct DashboardState: Codable {
         try container.encode(upcomingEvents, forKey: .upcomingEvents)
         try container.encode(telemetryMetrics, forKey: .telemetryMetrics)
         try container.encode(historyRecords, forKey: .historyRecords)
+        try container.encode(customTags, forKey: .customTags)
     }
 }

@@ -60,10 +60,29 @@ public struct DashboardView: View {
                     height: geometry.size.height
                 )
 
-                // RIGHT COLUMN: 35% DECK (Upcoming, Backlog, History)
+                // RIGHT COLUMN: 35% DECK (New, Upcoming, Backlog, History)
                 VStack(spacing: 0) {
                     ZStack {
                         switch store.activeRightTab {
+                        case .create:
+                            VStack(spacing: 0) {
+                                CreateTaskHeaderView()
+
+                                ScrollView(.vertical) {
+                                    CreateTaskView(store: store)
+                                        .padding(.horizontal, 24 * scalar)
+                                        .padding(.top, 16 * scalar)
+                                        .padding(.bottom, 24 * scalar)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .leading).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                )
+                            )
+
                         case .upcoming:
                             VStack(spacing: 0) {
                                 UpcomingHeaderView()

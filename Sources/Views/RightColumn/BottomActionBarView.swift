@@ -7,14 +7,20 @@ public struct BottomActionBarView: View {
 
     public var body: some View {
         HStack(spacing: 2 * s) {
+            // 1. New (Active Creation Trigger)
             RibbonActionButton(
                 icon: "plus.circle",
                 label: "NEW",
-                isSelected: false
+                isSelected: store.activeRightTab == .create
             ) {
-                // Hook for task creation workflow
+                if store.activeRightTab != .create {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        store.selectRightTab(.create)
+                    }
+                }
             }
 
+            // 2. Upcoming
             RibbonActionButton(
                 icon: "calendar",
                 label: "UPCOMING",
@@ -27,6 +33,7 @@ public struct BottomActionBarView: View {
                 }
             }
 
+            // 3. Backlog
             RibbonActionButton(
                 icon: "tray.full",
                 label: "BACKLOG",
@@ -39,6 +46,7 @@ public struct BottomActionBarView: View {
                 }
             }
 
+            // 4. History
             RibbonActionButton(
                 icon: "clock.arrow.circlepath",
                 label: "HISTORY",
