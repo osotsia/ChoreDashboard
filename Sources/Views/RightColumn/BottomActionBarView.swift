@@ -1,3 +1,4 @@
+// Sources/Views/RightColumn/BottomActionBarView.swift
 import SwiftUI
 
 public struct BottomActionBarView: View {
@@ -6,7 +7,6 @@ public struct BottomActionBarView: View {
 
     public var body: some View {
         HStack(spacing: 2 * s) {
-            // 1. New (Stub)
             RibbonActionButton(
                 icon: "plus.circle",
                 label: "NEW",
@@ -15,39 +15,40 @@ public struct BottomActionBarView: View {
                 // Hook for task creation workflow
             }
 
-            // 2. Upcoming (Active view toggle)
             RibbonActionButton(
                 icon: "calendar",
                 label: "UPCOMING",
-                isSelected: !store.isShowingBacklog
+                isSelected: store.activeRightTab == .upcoming
             ) {
-                if store.isShowingBacklog {
+                if store.activeRightTab != .upcoming {
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.isShowingBacklog = false
+                        store.selectRightTab(.upcoming)
                     }
                 }
             }
 
-            // 3. Backlog (Active view toggle)
             RibbonActionButton(
                 icon: "tray.full",
                 label: "BACKLOG",
-                isSelected: store.isShowingBacklog
+                isSelected: store.activeRightTab == .backlog
             ) {
-                if !store.isShowingBacklog {
+                if store.activeRightTab != .backlog {
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.isShowingBacklog = true
+                        store.selectRightTab(.backlog)
                     }
                 }
             }
 
-            // 4. History (Stub)
             RibbonActionButton(
                 icon: "clock.arrow.circlepath",
                 label: "HISTORY",
-                isSelected: false
+                isSelected: store.activeRightTab == .history
             ) {
-                // Hook for operational history log
+                if store.activeRightTab != .history {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        store.selectRightTab(.history)
+                    }
+                }
             }
         }
         .padding(4 * s)
@@ -59,7 +60,6 @@ public struct BottomActionBarView: View {
     }
 }
 
-// MARK: - Ribbon Action Button Component
 private struct RibbonActionButton: View {
     let icon: String
     let label: String
@@ -92,7 +92,6 @@ private struct RibbonActionButton: View {
     }
 }
 
-// MARK: - Button Press Feedback
 private struct TactileButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

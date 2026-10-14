@@ -1,3 +1,4 @@
+// Sources/Views/LeftColumn/PrimaryFocusView.swift
 import SwiftUI
 
 public struct PrimaryFocusView: View {
@@ -44,7 +45,9 @@ public struct PrimaryFocusView: View {
             // 3-Column Modern UI Tile Grid
             LazyVGrid(columns: threeColumns, spacing: 10 * s) {
                 ForEach(store.state.focusJobs) { job in
-                    FocusJobTile(job: job)
+                    FocusJobTile(job: job) {
+                        store.toggleFocusJob(id: job.id)
+                    }
                 }
             }
 

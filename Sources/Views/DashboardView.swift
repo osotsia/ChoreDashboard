@@ -1,6 +1,6 @@
+// Sources/Views/DashboardView.swift
 import SwiftUI
 
-// MARK: - Left Column Layout (Adaptive Split: Hug Content up to 40%)
 private struct LeftColumnAdaptiveLayout: Layout {
     let maxBottomRatio: CGFloat
 
@@ -50,9 +50,7 @@ public struct DashboardView: View {
             let scalar = max(1.0, geometry.size.width / AppConfig.baseWidth)
 
             HStack(spacing: 0) {
-                // =============================================================
-                // LEFT COLUMN: 65% OPERATIONAL FOCUS (Dark Zones)
-                // =============================================================
+                // LEFT COLUMN: 65% OPERATIONAL FOCUS
                 LeftColumnAdaptiveLayout(maxBottomRatio: 0.40) {
                     PrimaryFocusView(store: store)
                     BaselineResetView(store: store)
@@ -62,13 +60,11 @@ public struct DashboardView: View {
                     height: geometry.size.height
                 )
 
-                // =============================================================
-                // RIGHT COLUMN: 35% HORIZON & BACKLOG (Deck Carousel Panel)
-                // =============================================================
+                // RIGHT COLUMN: 35% DECK (Upcoming, Backlog, History)
                 VStack(spacing: 0) {
                     ZStack {
-                        if !store.isShowingBacklog {
-                            // Panel A: Upcoming Horizon
+                        switch store.activeRightTab {
+                        case .upcoming:
                             VStack(spacing: 0) {
                                 UpcomingHeaderView()
 
@@ -86,8 +82,8 @@ public struct DashboardView: View {
                                     removal: .move(edge: .leading).combined(with: .opacity)
                                 )
                             )
-                        } else {
-                            // Panel B: Operational Backlog (Scrollable Composite Inventory)
+
+                        case .backlog:
                             VStack(spacing: 0) {
                                 BacklogHeaderView(count: totalBacklogCount)
 
@@ -109,12 +105,30 @@ public struct DashboardView: View {
                                     removal: .move(edge: .trailing).combined(with: .opacity)
                                 )
                             )
+
+                        case .history:
+                            VStack(spacing: 0) {
+                                HistoryHeaderView(count: store.state.historyRecords.count)
+
+                                ScrollView(.vertical) {
+                                    HistoryTimelineView(records: store.state.historyRecords)
+                                        .padding(.horizontal, 24 * scalar)
+                                        .padding(.top, 12 * scalar)
+                                        .padding(.bottom, 24 * scalar)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                )
+                            )
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
 
-                    // Anchored Tactile Action Dock
                     BottomActionBarView(store: store)
                         .padding(.horizontal, 24 * scalar)
                         .padding(.top, 16 * scalar)

@@ -1,7 +1,9 @@
+// Sources/Views/Components/FocusJobTile.swift
 import SwiftUI
 
 public struct FocusJobTile: View {
     public let job: FocusJob
+    public var onToggle: () -> Void
     @Environment(\.scaleFactor) private var s
 
     private var hasSubtitleComment: Bool {
@@ -10,28 +12,53 @@ public struct FocusJobTile: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Detailed System Badge
-            Text(job.tag.uppercased())
-                .font(.system(size: 10 * s, weight: .bold))
-                .tracking(1.3 * s)
-                .foregroundColor(Color.white.opacity(0.7))
-                .lineLimit(1)
-                .padding(.bottom, 6 * s)
+            // Header Row: System Tag + State-Aware Checkbox Target
+            HStack(alignment: .center) {
+                Text(job.tag.uppercased())
+                    .font(.system(size: 10 * s, weight: .bold))
+                    .tracking(1.3 * s)
+                    .foregroundColor(job.isCompleted ? Color.white.opacity(0.35) : Color.white.opacity(0.7))
+                    .lineLimit(1)
+
+                Spacer()
+
+                Button(action: onToggle) {
+                    ZStack {
+                        Rectangle()
+                            .strokeBorder(
+                                job.isCompleted ? Color.white : Color.white.opacity(0.35),
+                                lineWidth: 1.5 * s
+                            )
+                            .frame(width: 17 * s, height: 17 * s)
+                            .background(job.isCompleted ? Color.white : Color.clear)
+
+                        if job.isCompleted {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11 * s, weight: .black))
+                                .foregroundColor(.black)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.bottom, 8 * s)
 
             // Primary Job Title
             Text(job.title)
                 .font(.system(size: 14 * s, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(job.isCompleted ? Color.white.opacity(0.4) : .white)
+                .strikethrough(job.isCompleted, color: Color.white.opacity(0.4))
                 .lineSpacing(1.5 * s)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, hasSubtitleComment ? 6 * s : 0)
 
-            // Contextual 1-Sentence Subtitle
+            // Contextual Subtitle
             if hasSubtitleComment {
                 Text(job.notes)
                     .font(.system(size: 12 * s, weight: .medium))
-                    .foregroundColor(Color.white.opacity(0.85))
+                    .foregroundColor(job.isCompleted ? Color.white.opacity(0.3) : Color.white.opacity(0.85))
                     .lineSpacing(1.5 * s)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -41,10 +68,13 @@ public struct FocusJobTile: View {
         }
         .padding(14 * s)
         .frame(maxWidth: .infinity, minHeight: 120 * s, alignment: .topLeading)
-        .background(AppConfig.Colors.tileBackground)
+        .background(job.isCompleted ? AppConfig.Colors.tileBackground.opacity(0.5) : AppConfig.Colors.tileBackground)
         .overlay(
             Rectangle()
-                .strokeBorder(Color.white.opacity(0.2), lineWidth: 1 * s)
+                .strokeBorder(
+                    job.isCompleted ? Color.white.opacity(0.1) : Color.white.opacity(0.2),
+                    lineWidth: 1 * s
+                )
         )
     }
 }

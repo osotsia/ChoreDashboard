@@ -1,3 +1,4 @@
+// Sources/Models/DashboardState.swift
 import Foundation
 
 public struct DashboardState: Codable {
@@ -12,6 +13,7 @@ public struct DashboardState: Codable {
     public var baselineTasks: [ChoreItem]
     public var upcomingEvents: [HorizonEvent]
     public var telemetryMetrics: [TelemetryMetric]
+    public var historyRecords: [HistoryRecord]
 
     public init(
         focusOverline: String = "SCHEDULED OPERATIONS",
@@ -24,7 +26,8 @@ public struct DashboardState: Codable {
         baselineRule: String = "RULE: Complete before noon.",
         baselineTasks: [ChoreItem],
         upcomingEvents: [HorizonEvent],
-        telemetryMetrics: [TelemetryMetric] = []
+        telemetryMetrics: [TelemetryMetric] = [],
+        historyRecords: [HistoryRecord] = []
     ) {
         self.focusOverline = focusOverline
         self.focusTitle = focusTitle
@@ -37,6 +40,7 @@ public struct DashboardState: Codable {
         self.baselineTasks = baselineTasks
         self.upcomingEvents = upcomingEvents
         self.telemetryMetrics = telemetryMetrics
+        self.historyRecords = historyRecords
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -48,19 +52,18 @@ public struct DashboardState: Codable {
         case baselineTitle, baselineSubtitle, baselineRule
         case baselineTasks
         case upcomingEvents, telemetryMetrics
+        case historyRecords
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        // Generalize overline
         if let decodedOverline = try container.decodeIfPresent(String.self, forKey: .focusOverline) {
             self.focusOverline = (decodedOverline.contains("KITCHEN") || decodedOverline.contains("ZONE")) ? "SCHEDULED OPERATIONS" : decodedOverline
         } else {
             self.focusOverline = "SCHEDULED OPERATIONS"
         }
 
-        // Generalize primary title to "Main Tasks"
         if let decodedTitle = try container.decodeIfPresent(String.self, forKey: .focusTitle), !decodedTitle.isEmpty {
             let lower = decodedTitle.lowercased()
             if lower.contains("kitchen") || lower.contains("bathroom") || lower.contains("targeted") {
@@ -72,7 +75,6 @@ public struct DashboardState: Codable {
             self.focusTitle = "Main Tasks"
         }
 
-        // Generalize subtitle
         if let decodedSub = try container.decodeIfPresent(String.self, forKey: .focusSubtitle), !decodedSub.isEmpty {
             let lower = decodedSub.lowercased()
             if lower.contains("bottle") || lower.contains("descaling") {
@@ -107,6 +109,7 @@ public struct DashboardState: Codable {
         self.baselineTasks = try container.decode([ChoreItem].self, forKey: .baselineTasks)
         self.upcomingEvents = try container.decode([HorizonEvent].self, forKey: .upcomingEvents)
         self.telemetryMetrics = try container.decodeIfPresent([TelemetryMetric].self, forKey: .telemetryMetrics) ?? []
+        self.historyRecords = try container.decodeIfPresent([HistoryRecord].self, forKey: .historyRecords) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -122,5 +125,6 @@ public struct DashboardState: Codable {
         try container.encode(baselineTasks, forKey: .baselineTasks)
         try container.encode(upcomingEvents, forKey: .upcomingEvents)
         try container.encode(telemetryMetrics, forKey: .telemetryMetrics)
+        try container.encode(historyRecords, forKey: .historyRecords)
     }
 }
