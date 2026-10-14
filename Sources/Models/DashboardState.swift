@@ -1,7 +1,7 @@
-// Sources/Models/DashboardState.swift
 import Foundation
 
 public struct DashboardState: Codable {
+    public var schemaVersion: Int
     public var focusOverline: String
     public var focusTitle: String
     public var focusSubtitle: String
@@ -16,6 +16,7 @@ public struct DashboardState: Codable {
     public var historyRecords: [HistoryRecord]
 
     public init(
+        schemaVersion: Int = 1,
         focusOverline: String = "SCHEDULED OPERATIONS",
         focusTitle: String = "Main Tasks",
         focusSubtitle: String = "Targeted deep maintenance · Non-routine upkeep",
@@ -29,6 +30,7 @@ public struct DashboardState: Codable {
         telemetryMetrics: [TelemetryMetric] = [],
         historyRecords: [HistoryRecord] = []
     ) {
+        self.schemaVersion = schemaVersion
         self.focusOverline = focusOverline
         self.focusTitle = focusTitle
         self.focusSubtitle = focusSubtitle
@@ -44,6 +46,7 @@ public struct DashboardState: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case schemaVersion
         case focusOverline, zoneLabel
         case focusTitle, heroTitle
         case focusSubtitle, heroSubtitle
@@ -58,35 +61,22 @@ public struct DashboardState: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        if let decodedOverline = try container.decodeIfPresent(String.self, forKey: .focusOverline) {
-            self.focusOverline = (decodedOverline.contains("KITCHEN") || decodedOverline.contains("ZONE")) ? "SCHEDULED OPERATIONS" : decodedOverline
-        } else {
-            self.focusOverline = "SCHEDULED OPERATIONS"
-        }
+        self.schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
 
-        if let decodedTitle = try container.decodeIfPresent(String.self, forKey: .focusTitle), !decodedTitle.isEmpty {
-            let lower = decodedTitle.lowercased()
-            if lower.contains("kitchen") || lower.contains("bathroom") || lower.contains("targeted") {
-                self.focusTitle = "Main Tasks"
-            } else {
-                self.focusTitle = decodedTitle
-            }
-        } else {
-            self.focusTitle = "Main Tasks"
-        }
+        self.focusOverline = try container.decodeIfPresent(String.self, forKey: .focusOverline)
+            ?? (try container.decodeIfPresent(String.self, forKey: .zoneLabel))
+            ?? "SCHEDULED OPERATIONS"
 
-        if let decodedSub = try container.decodeIfPresent(String.self, forKey: .focusSubtitle), !decodedSub.isEmpty {
-            let lower = decodedSub.lowercased()
-            if lower.contains("bottle") || lower.contains("descaling") {
-                self.focusSubtitle = "Targeted deep maintenance · Non-routine upkeep"
-            } else {
-                self.focusSubtitle = decodedSub
-            }
-        } else {
-            self.focusSubtitle = "Targeted deep maintenance · Non-routine upkeep"
-        }
+        self.focusTitle = try container.decodeIfPresent(String.self, forKey: .focusTitle)
+            ?? (try container.decodeIfPresent(String.self, forKey: .heroTitle))
+            ?? "Main Tasks"
 
-        self.heroTools = try container.decodeIfPresent(String.self, forKey: .heroTools) ?? "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit."
+        self.focusSubtitle = try container.decodeIfPresent(String.self, forKey: .focusSubtitle)
+            ?? (try container.decodeIfPresent(String.self, forKey: .heroSubtitle))
+            ?? "Targeted deep maintenance · Non-routine upkeep"
+
+        self.heroTools = try container.decodeIfPresent(String.self, forKey: .heroTools)
+            ?? "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit."
 
         if let rawJobs = try container.decodeIfPresent([FocusJob].self, forKey: .focusJobs), !rawJobs.isEmpty {
             self.focusJobs = rawJobs
@@ -114,6 +104,7 @@ public struct DashboardState: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
         try container.encode(focusOverline, forKey: .focusOverline)
         try container.encode(focusTitle, forKey: .focusTitle)
         try container.encode(focusSubtitle, forKey: .focusSubtitle)

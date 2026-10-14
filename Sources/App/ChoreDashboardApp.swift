@@ -1,22 +1,30 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Native Window Aspect-Ratio Lock
+// MARK: - Native Window Aspect-Ratio Lock (Deterministic Lifecycle)
+private final class AspectLockView: NSView {
+    var ratio: CGSize = .zero
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window = window, ratio.width > 0, ratio.height > 0 else { return }
+        window.aspectRatio = NSSize(width: ratio.width, height: ratio.height)
+        window.minSize = NSSize(width: ratio.width, height: ratio.height)
+    }
+}
+
 private struct WindowAspectLock: NSViewRepresentable {
     let ratio: CGSize
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            if let window = view.window {
-                window.aspectRatio = NSSize(width: ratio.width, height: ratio.height)
-                window.minSize = NSSize(width: ratio.width, height: ratio.height)
-            }
-        }
+    func makeNSView(context: Context) -> AspectLockView {
+        let view = AspectLockView()
+        view.ratio = ratio
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: AspectLockView, context: Context) {
+        nsView.ratio = ratio
+    }
 }
 
 @main
