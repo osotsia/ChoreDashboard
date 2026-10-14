@@ -1,3 +1,4 @@
+// --- File: Sources/Views/RightColumn/EditTaskView.swift ---
 import SwiftUI
 
 public struct EditTaskView: View {
@@ -523,20 +524,10 @@ public struct EditTaskView: View {
             notes = event.notes
             durationMinutes = 15
             isOneTime = false
-
-            let lower = event.timeAnchor.lowercased()
-            if lower.contains("month") {
-                repeatUnit = .month
-                repeatCount = 1
-            } else if lower.contains("week") {
-                repeatUnit = .week
-                repeatCount = 2
-            } else {
-                repeatUnit = .day
-                repeatCount = 3
-            }
-
-            selectedState = .notYet
+            // Direct synchronization: reads the verified cadence and health state from the model
+            repeatCount = event.repeatCount
+            repeatUnit = event.repeatUnit
+            selectedState = event.healthState
         }
     }
 }

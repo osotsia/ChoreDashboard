@@ -31,7 +31,7 @@ public enum EditableTaskTarget: Identifiable, Equatable {
         case (.baseline(let a), .baseline(let b)):
             return a.id == b.id && a.title == b.title && a.tag == b.tag && a.durationMinutes == b.durationMinutes && a.isCompleted == b.isCompleted
         case (.horizon(let a), .horizon(let b)):
-            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.notes == b.notes && a.timeAnchor == b.timeAnchor
+            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.notes == b.notes && a.timeAnchor == b.timeAnchor && a.repeatCount == b.repeatCount && a.repeatUnit == b.repeatUnit && a.healthState == b.healthState
         default:
             return false
         }
@@ -172,7 +172,6 @@ public final class DashboardStore {
     public var availableTags: [String] {
         var tags = Set<String>()
 
-        // Split only on bullets or commas so hyphens (e.g. POST-MORTEM) remain intact
         let sanitize: (String) -> String = { raw in
             let clean = raw.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
             return clean.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -217,7 +216,6 @@ public final class DashboardStore {
         if let initial = Self.loadInitialBlocking(from: fileURL) {
             self.state = initial
         } else {
-            // Backup corrupt file if present to preserve user data
             if FileManager.default.fileExists(atPath: fileURL.path) {
                 let backupURL = fileURL.deletingPathExtension()
                     .appendingPathExtension("corrupt.\(Int(Date().timeIntervalSince1970)).json")
@@ -358,7 +356,10 @@ public final class DashboardStore {
                 tag: cleanTag,
                 title: cleanTitle,
                 notes: cleanNotes,
-                timeAnchor: timeAnchor
+                timeAnchor: timeAnchor,
+                repeatCount: repeatCount,
+                repeatUnit: repeatUnit,
+                healthState: healthState
             )
             state.upcomingEvents.append(event)
         }
@@ -463,7 +464,10 @@ public final class DashboardStore {
             tag: cleanTag,
             title: cleanTitle,
             notes: cleanNotes,
-            timeAnchor: timeAnchor
+            timeAnchor: timeAnchor,
+            repeatCount: repeatCount,
+            repeatUnit: repeatUnit,
+            healthState: healthState
         )
         state.upcomingEvents.append(event)
 
@@ -478,6 +482,55 @@ public final class DashboardStore {
             state.historyRecords.insert(record, at: 0)
         }
 
+        persistAsync()
+    }
+
+    public func addFocusJob(title: String, tag: String, notes: String) {
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let job = FocusJob(
+            tag: cleanTag.isEmpty ? "OPERATION" : cleanTag,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            isCompleted: false
+        )
+        state.focusJobs.append(job)
+        persistAsync()
+    }
+
+    public func addBaselineTask(title: String, tag: String, durationMinutes: Int) {
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let task = ChoreItem(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            durationMinutes: max(1, durationMinutes),
+            tag: cleanTag.isEmpty ? "GENERAL" : cleanTag,
+            isCompleted: false
+        )
+        state.baselineTasks.append(task)
+        persistAsync()
+    }
+
+    public func addUpcomingEvent(
+        title: String,
+        tag: String,
+        notes: String,
+        timeAnchor: String,
+        repeatCount: Int = 1,
+        repeatUnit: CadenceUnit = .month,
+        healthState: TaskHealthState = .good
+    ) {
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let cleanAnchor = timeAnchor.trimmingCharacters(in: .whitespacesAndNewlines)
+        let event = HorizonEvent(
+            id: UUID(),
+            tag: cleanTag.isEmpty ? "SCHEDULED" : cleanTag,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            timeAnchor: cleanAnchor.isEmpty ? "Upcoming" : cleanAnchor,
+            repeatCount: repeatCount,
+            repeatUnit: repeatUnit,
+            healthState: healthState
+        )
+        state.upcomingEvents.append(event)
         persistAsync()
     }
 

@@ -365,7 +365,7 @@ public struct CreateTaskView: View {
                 }
             }
 
-            // 4. Current Status & Runway Gauge
+            // 4. Current Status & Segmented Runway Gauge
             VStack(alignment: .leading, spacing: 8 * s) {
                 Text("CURRENT OPERATIONAL STATUS")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -481,7 +481,7 @@ public struct CreateTaskView: View {
     }
 }
 
-// MARK: - Animated Health Runway Gauge
+// MARK: - Animated Segmented Runway Gauge
 public struct HealthRunwayGauge: View {
     public let state: TaskHealthState
     public let s: CGFloat
@@ -491,31 +491,46 @@ public struct HealthRunwayGauge: View {
         self.s = s
     }
 
-    private var progress: Double {
+    private var totalSegments: Int { 4 }
+
+    private var filledSegments: Int {
         switch state {
-        case .good:    return 0.90
-        case .notYet:  return 0.55
-        case .due:     return 0.20
-        case .overdue: return 0.05
+        case .good:    return 4
+        case .notYet:  return 3
+        case .due:     return 1
+        case .overdue: return 0
+        }
+    }
+
+    private var stateColor: Color {
+        switch state {
+        case .good:
+            return Color(red: 16/255, green: 185/255, blue: 129/255) // Emerald
+        case .notYet:
+            return Color(red: 234/255, green: 179/255, blue: 8/255)   // Technical Gold
+        case .due:
+            return Color(red: 249/255, green: 115/255, blue: 22/255)  // Alert Orange
+        case .overdue:
+            return Color(red: 239/255, green: 68/255, blue: 68/255)   // Decay Hazard Red
         }
     }
 
     private var runwayLabel: String {
         switch state {
-        case .good:    return "RUNWAY: 90% (HEALTHY BUFFER)"
-        case .notYet:  return "RUNWAY: 55% (MID-CYCLE)"
-        case .due:     return "RUNWAY: 20% (CYCLE EXHAUSTED)"
-        case .overdue: return "RUNWAY: 5% (OVERDUE HAZARD)"
+        case .good:    return "RUNWAY: 100% (HEALTHY BUFFER)"
+        case .notYet:  return "RUNWAY: 75% (MID-CYCLE RUNNING)"
+        case .due:     return "RUNWAY: 25% (CYCLE EXHAUSTED)"
+        case .overdue: return "RUNWAY: 0% (DECAY HAZARD)"
         }
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 4 * s) {
+        VStack(alignment: .leading, spacing: 5 * s) {
             HStack {
                 Text(runwayLabel)
                     .font(.system(size: 8.5 * s, weight: .black, design: .monospaced))
                     .tracking(0.8 * s)
-                    .foregroundColor(state == .overdue ? .red : AppConfig.Colors.subtextGrey)
+                    .foregroundColor(stateColor)
 
                 Spacer()
 
@@ -523,32 +538,39 @@ public struct HealthRunwayGauge: View {
                     HStack(spacing: 3 * s) {
                         Image(systemName: "radiation")
                             .font(.system(size: 11 * s, weight: .black))
-                            .foregroundColor(.red)
+                            .foregroundColor(stateColor)
                         Text("DECAY HAZARD")
                             .font(.system(size: 8 * s, weight: .black))
-                            .foregroundColor(.red)
+                            .foregroundColor(stateColor)
                     }
                     .transition(.opacity.combined(with: .scale))
                 }
             }
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3.5 * s)
-                        .fill(Color.black.opacity(0.08))
-                        .frame(height: 7 * s)
-
-                    RoundedRectangle(cornerRadius: 3.5 * s)
-                        .fill(
-                            state == .overdue
-                                ? Color.red
-                                : (state == .due ? Color.black : Color.black.opacity(0.85))
+            // Segmented Tactical Gauge Enclosure
+            HStack(spacing: 3 * s) {
+                ForEach(0..<totalSegments, id: \.self) { index in
+                    let isFilled = index < filledSegments
+                    RoundedRectangle(cornerRadius: 1.5 * s)
+                        .fill(isFilled ? stateColor : stateColor.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 1.5 * s)
+                                .strokeBorder(
+                                    isFilled ? stateColor.opacity(0.4) : Color.clear,
+                                    lineWidth: 0.5 * s
+                                )
                         )
-                        .frame(width: max(8 * s, geo.size.width * progress), height: 7 * s)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: progress)
                 }
             }
-            .frame(height: 7 * s)
+            .padding(3.5 * s)
+            .frame(height: 18 * s)
+            .background(stateColor.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 4 * s))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4 * s)
+                    .strokeBorder(stateColor.opacity(0.75), lineWidth: 1.5 * s)
+            )
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: state)
         }
         .padding(.vertical, 2 * s)
     }

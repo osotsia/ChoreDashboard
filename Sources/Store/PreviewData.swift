@@ -80,37 +80,49 @@ public enum PreviewData {
                     tag: "PLANTS",
                     title: "Water flowers",
                     notes: "Check soil and water indoor pots.",
-                    timeAnchor: "In 2 Days"
+                    timeAnchor: "In 2 Days",
+                    repeatCount: 4,
+                    repeatUnit: .day,
+                    healthState: .notYet
                 ),
                 HorizonEvent(
                     tag: "WASTE",
                     title: "Kitchen trash",
                     notes: "Empty can and replace liner.",
-                    timeAnchor: "In 3 Days"
+                    timeAnchor: "In 3 Days",
+                    repeatCount: 1,
+                    repeatUnit: .week,
+                    healthState: .notYet
                 ),
                 HorizonEvent(
                     tag: "FLOORS",
                     title: "Basic vacuuming",
                     notes: "Vacuum living room and main walkways.",
-                    timeAnchor: "In 12 Days"
+                    timeAnchor: "In 12 Days",
+                    repeatCount: 2,
+                    repeatUnit: .week,
+                    healthState: .good
                 ),
                 HorizonEvent(
                     tag: "STORAGE",
                     title: "Tidy up boxes",
                     notes: "Break down cardboard and recycle.",
-                    timeAnchor: "In 28 Days"
+                    timeAnchor: "In 28 Days",
+                    repeatCount: 1,
+                    repeatUnit: .month,
+                    healthState: .good
                 ),
                 HorizonEvent(
                     tag: "BATH",
                     title: "Clean bathtub",
                     notes: "Scrub tub basin and wipe fixtures.",
-                    timeAnchor: "In 28 Days"
+                    timeAnchor: "In 28 Days",
+                    repeatCount: 1,
+                    repeatUnit: .month,
+                    healthState: .good
                 )
             ],
-            telemetryMetrics: [
-                TelemetryMetric(label: "CYCLE HEALTH", status: "NOMINAL"),
-                TelemetryMetric(label: "QUEUE LATENCY", status: "< 24H")
-            ],
+            telemetryMetrics: [],
             historyRecords: [
                 HistoryRecord(
                     jobId: kitchenId,
