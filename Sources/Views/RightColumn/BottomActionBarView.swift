@@ -4,97 +4,98 @@ public struct BottomActionBarView: View {
     public var store: DashboardStore
     @Environment(\.scaleFactor) private var s
 
-    // Composite tally: Total active jobs (top-left) + unchecked daily tasks (bottom-left)
-    private var remainingCount: Int {
-        let focusJobsCount = store.state.focusJobs.count
-        let uncheckedBaselineCount = store.state.baselineTasks.filter { !$0.isCompleted }.count
-        return focusJobsCount + uncheckedBaselineCount
-    }
-
     public var body: some View {
-        HStack(spacing: 8 * s) {
-            // Button 1: Remaining (Composite Countdown)
-            Button(action: {
-                // Focus / inspect operational status
-            }) {
-                VStack(spacing: 3 * s) {
-                    Text("\(remainingCount)")
-                        .font(.system(size: 16 * s, weight: .black, design: .monospaced))
-                        .foregroundColor(.black)
-
-                    Text("REMAINING")
-                        .font(.system(size: 9 * s, weight: .bold))
-                        .tracking(1.2 * s)
-                        .foregroundColor(.black)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 50 * s)
-                .background(Color.white)
-                .border(Color.black, width: 1.5 * s)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(TactileButtonStyle())
-
-            // Button 2: New Task (+)
-            Button(action: {
+        HStack(spacing: 2 * s) {
+            // 1. New (Stub)
+            RibbonActionButton(
+                icon: "plus.circle",
+                label: "NEW",
+                isSelected: false
+            ) {
                 // Hook for task creation workflow
-            }) {
-                VStack(spacing: 3 * s) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 15 * s, weight: .bold))
-                        .foregroundColor(.black)
-
-                    Text("NEW TASK")
-                        .font(.system(size: 9 * s, weight: .bold))
-                        .tracking(1.2 * s)
-                        .foregroundColor(.black)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 50 * s)
-                .background(Color.white)
-                .border(Color.black, width: 1.5 * s)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(TactileButtonStyle())
 
-            // Button 3: Backlog / Upcoming Toggle
-            Button(action: {
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                    store.toggleBacklog()
-                }
-            }) {
-                VStack(spacing: 2 * s) {
-                    Image(systemName: store.isShowingBacklog ? "calendar" : "tray.full")
-                        .font(.system(size: 12 * s, weight: .bold))
-                        .foregroundColor(.black)
-
-                    VStack(spacing: 1 * s) {
-                        Text("SWITCH TO")
-                            .font(.system(size: 8 * s, weight: .bold))
-                            .tracking(1.0 * s)
-                            .foregroundColor(AppConfig.Colors.subtextGrey)
-
-                        Text(store.isShowingBacklog ? "UPCOMING" : "BACKLOG")
-                            .font(.system(size: 9 * s, weight: .bold))
-                            .tracking(1.2 * s)
-                            .foregroundColor(.black)
+            // 2. Upcoming (Active view toggle)
+            RibbonActionButton(
+                icon: "calendar",
+                label: "UPCOMING",
+                isSelected: !store.isShowingBacklog
+            ) {
+                if store.isShowingBacklog {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        store.isShowingBacklog = false
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 50 * s)
-                .background(Color.white)
-                .border(Color.black, width: 1.5 * s)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(TactileButtonStyle())
+
+            // 3. Backlog (Active view toggle)
+            RibbonActionButton(
+                icon: "tray.full",
+                label: "BACKLOG",
+                isSelected: store.isShowingBacklog
+            ) {
+                if !store.isShowingBacklog {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                        store.isShowingBacklog = true
+                    }
+                }
+            }
+
+            // 4. History (Stub)
+            RibbonActionButton(
+                icon: "clock.arrow.circlepath",
+                label: "HISTORY",
+                isSelected: false
+            ) {
+                // Hook for operational history log
+            }
         }
+        .padding(4 * s)
+        .background(Color.white)
+        .overlay(
+            Rectangle()
+                .strokeBorder(AppConfig.Colors.lineGrey, lineWidth: 1 * s)
+        )
     }
 }
 
-// MARK: - Tactical Button Style (Press Feedback)
+// MARK: - Ribbon Action Button Component
+private struct RibbonActionButton: View {
+    let icon: String
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+    @Environment(\.scaleFactor) private var s
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4 * s) {
+                Image(systemName: icon)
+                    .font(.system(size: 19 * s, weight: isSelected ? .bold : .regular))
+                    .foregroundColor(isSelected ? .black : AppConfig.Colors.subtextGrey)
+                    .frame(height: 22 * s)
+
+                Text(label)
+                    .font(.system(size: 9 * s, weight: isSelected ? .bold : .semibold))
+                    .tracking(1.1 * s)
+                    .foregroundColor(isSelected ? .black : AppConfig.Colors.subtextGrey)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54 * s)
+            .background(
+                isSelected ? Color.black.opacity(0.06) : Color.clear
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(TactileButtonStyle())
+    }
+}
+
+// MARK: - Button Press Feedback
 private struct TactileButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .opacity(configuration.isPressed ? 0.7 : 1.0)
+            .opacity(configuration.isPressed ? 0.6 : 1.0)
     }
 }
