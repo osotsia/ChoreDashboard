@@ -93,6 +93,12 @@ public struct EditTaskView: View {
         )
     }
 
+    private func cancelOut() {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            store.dismissEditTask()
+        }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 16 * s) {
             // 1. Task Title
@@ -454,11 +460,7 @@ public struct EditTaskView: View {
                 .disabled(!isValid)
                 .buttonStyle(.plain)
 
-                Button(action: {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.dismissEditTask()
-                    }
-                }) {
+                Button(action: cancelOut) {
                     Text("CANCEL")
                         .font(.system(size: 10 * s, weight: .bold))
                         .tracking(1.2 * s)
@@ -468,6 +470,7 @@ public struct EditTaskView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.escape, modifiers: [])
 
                 Button(action: {
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
@@ -491,6 +494,7 @@ public struct EditTaskView: View {
             .padding(.top, 4 * s)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onExitCommand(perform: cancelOut)
         .onAppear {
             seedInitialValues()
         }
@@ -524,7 +528,6 @@ public struct EditTaskView: View {
             notes = event.notes
             durationMinutes = 15
             isOneTime = false
-            // Direct synchronization: reads the verified cadence and health state from the model
             repeatCount = event.repeatCount
             repeatUnit = event.repeatUnit
             selectedState = event.healthState

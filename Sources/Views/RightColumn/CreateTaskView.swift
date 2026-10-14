@@ -89,6 +89,10 @@ public struct CreateTaskView: View {
             healthState: selectedState
         )
 
+        cancelOut()
+    }
+
+    private func cancelOut() {
         withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
             store.dismissCreateTask()
         }
@@ -365,7 +369,7 @@ public struct CreateTaskView: View {
                 }
             }
 
-            // 4. Current Status & Segmented Runway Gauge
+            // 4. Current Status & Runway Gauge
             VStack(alignment: .leading, spacing: 8 * s) {
                 Text("CURRENT OPERATIONAL STATUS")
                     .font(.system(size: 10 * s, weight: .bold))
@@ -455,11 +459,7 @@ public struct CreateTaskView: View {
                 .disabled(!isValid)
                 .buttonStyle(.plain)
 
-                Button(action: {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.dismissCreateTask()
-                    }
-                }) {
+                Button(action: cancelOut) {
                     Text("CANCEL")
                         .font(.system(size: 10 * s, weight: .bold))
                         .tracking(1.2 * s)
@@ -469,10 +469,12 @@ public struct CreateTaskView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .keyboardShortcut(.escape, modifiers: [])
             }
             .padding(.top, 4 * s)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onExitCommand(perform: cancelOut)
         .onAppear {
             if selectedTag.isEmpty, let firstTag = store.availableTags.first {
                 selectedTag = firstTag
@@ -505,13 +507,13 @@ public struct HealthRunwayGauge: View {
     private var stateColor: Color {
         switch state {
         case .good:
-            return Color(red: 16/255, green: 185/255, blue: 129/255) // Emerald
+            return Color(red: 16/255, green: 185/255, blue: 129/255)
         case .notYet:
-            return Color(red: 234/255, green: 179/255, blue: 8/255)   // Technical Gold
+            return Color(red: 234/255, green: 179/255, blue: 8/255)
         case .due:
-            return Color(red: 249/255, green: 115/255, blue: 22/255)  // Alert Orange
+            return Color(red: 249/255, green: 115/255, blue: 22/255)
         case .overdue:
-            return Color(red: 239/255, green: 68/255, blue: 68/255)   // Decay Hazard Red
+            return Color(red: 239/255, green: 68/255, blue: 68/255)
         }
     }
 
@@ -547,7 +549,6 @@ public struct HealthRunwayGauge: View {
                 }
             }
 
-            // Segmented Tactical Gauge Enclosure
             HStack(spacing: 3 * s) {
                 ForEach(0..<totalSegments, id: \.self) { index in
                     let isFilled = index < filledSegments
