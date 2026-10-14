@@ -89,22 +89,21 @@ public struct DashboardView: View {
                                 .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
                             }
 
-                        case .upcoming:
+                        case .status:
                             VStack(spacing: 0) {
-                                PanelHeaderView(title: "UPCOMING & HORIZON", badgeText: "CADENCE QUEUE", badgeIcon: "calendar")
+                                PanelHeaderView(title: "OPERATIONAL STATUS", badgeText: "OVERVIEW", badgeIcon: "gauge.with.needle")
                                 ScrollView(.vertical) {
-                                    UpcomingTimelineView(
-                                        events: store.state.upcomingEvents,
-                                        highlightedId: store.editingTarget?.id,
-                                        onEdit: { event in
+                                    StatusView(
+                                        store: store,
+                                        onEditUpcomingEvent: { event in
                                             withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
                                                 store.startEditing(upcomingEvent: event)
                                             }
                                         }
                                     )
                                     .padding(.horizontal, 24 * scalar)
-                                    .padding(.top, 12 * scalar)
-                                    .padding(.bottom, 16 * scalar)
+                                    .padding(.top, 16 * scalar)
+                                    .padding(.bottom, 24 * scalar)
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }

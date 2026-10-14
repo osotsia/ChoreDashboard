@@ -3,7 +3,7 @@ import Observation
 import CryptoKit
 
 public enum RightPanelTab: String, Codable {
-    case upcoming
+    case status
     case backlog
     case history
     case create
@@ -88,6 +88,22 @@ public enum TaskHealthState: String, CaseIterable, Codable {
     }
 }
 
+public struct TodayOperationalSnapshot {
+    public let focusTotal: Int
+    public let focusCompleted: Int
+    public let focusOverdue: Int
+    public let focusRemaining: Int
+
+    public let baselineTotal: Int
+    public let baselineCompleted: Int
+    public let baselineRemaining: Int
+    public let baselineMinutesRemaining: Int
+
+    public let totalTasks: Int
+    public let completedTasks: Int
+    public let clearanceRate: Double
+}
+
 private final class DirectoryWatcher: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private var descriptor: Int32 = -1
@@ -158,13 +174,52 @@ private actor StatePersistenceEngine {
 @MainActor
 public final class DashboardStore {
     public var state: DashboardState
-    public var activeRightTab: RightPanelTab = .upcoming
-    public private(set) var previousRightTab: RightPanelTab = .upcoming
+    public var activeRightTab: RightPanelTab = .status
+    public private(set) var previousRightTab: RightPanelTab = .status
     public var editingTarget: EditableTaskTarget? = nil
 
     public var isShowingBacklog: Bool {
         get { activeRightTab == .backlog }
-        set { selectRightTab(newValue ? .backlog : .upcoming) }
+        set { selectRightTab(newValue ? .backlog : .status) }
+    }
+
+    public var todaySnapshot: TodayOperationalSnapshot {
+        let fTotal = state.focusJobs.count
+        let fDone = state.focusJobs.filter { $0.isCompleted }.count
+        let fOverdue = state.focusJobs.filter { $0.isOverdue && !$0.isCompleted }.count
+        let fRemaining = fTotal - fDone
+
+        let bTotal = state.baselineTasks.count
+        let bDone = state.baselineTasks.filter { $0.isCompleted }.count
+        let bRemaining = bTotal - bDone
+        let bMinsLeft = state.baselineTasks.filter { !$0.isCompleted }.reduce(0) { $0 + $1.durationMinutes }
+
+        let total = fTotal + bTotal
+        let completed = fDone + bDone
+        let rate = total > 0 ? Double(completed) / Double(total) : 1.0
+
+        return TodayOperationalSnapshot(
+            focusTotal: fTotal,
+            focusCompleted: fDone,
+            focusOverdue: fOverdue,
+            focusRemaining: fRemaining,
+            baselineTotal: bTotal,
+            baselineCompleted: bDone,
+            baselineRemaining: bRemaining,
+            baselineMinutesRemaining: bMinsLeft,
+            totalTasks: total,
+            completedTasks: completed,
+            clearanceRate: rate
+        )
+    }
+
+    public var sortedUpcomingEvents: [HorizonEvent] {
+        state.upcomingEvents.sorted {
+            if $0.estimatedDaysRemaining != $1.estimatedDaysRemaining {
+                return $0.estimatedDaysRemaining < $1.estimatedDaysRemaining
+            }
+            return $0.title < $1.title
+        }
     }
 
     public var availableTags: [String] {
@@ -233,6 +288,10 @@ public final class DashboardStore {
     public func dismissEditTask() {
         editingTarget = nil
         activeRightTab = previousRightTab
+    }
+
+    public func toggleBacklog() {
+        selectRightTab(activeRightTab == .backlog ? .status : .backlog)
     }
 
     public func startEditing(focusJob: FocusJob) {
@@ -417,10 +476,8 @@ public final class DashboardStore {
         let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !clean.isEmpty else { return }
 
-        // 1. Remove from explicit custom tags registry
         state.customTags.removeAll(where: { $0.uppercased() == clean })
 
-        // 2. Cascade fallback tag onto existing references to prevent availableTags re-derivation
         let fallbackTag = clean == "GENERAL" ? "OPERATIONS" : "GENERAL"
 
         for i in state.focusJobs.indices {
@@ -447,7 +504,6 @@ public final class DashboardStore {
         persistAsync()
     }
 
-    /// Backwards compatibility alias
     public func deleteCustomTag(_ tag: String) {
         deleteTag(tag)
     }

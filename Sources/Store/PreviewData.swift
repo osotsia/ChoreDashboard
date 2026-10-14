@@ -45,9 +45,12 @@ public enum PreviewData {
             upcomingEvents: [
                 HorizonEvent(tag: "PLANTS", title: "Water flowers", timeAnchor: "In 2 Days", repeatCount: 4, repeatUnit: .day, healthState: .notYet),
                 HorizonEvent(tag: "WASTE", title: "Kitchen trash", timeAnchor: "In 3 Days", repeatCount: 1, repeatUnit: .week, healthState: .notYet),
+                HorizonEvent(tag: "WATER", title: "Replace water filter", timeAnchor: "In 7 Days", repeatCount: 1, repeatUnit: .week, healthState: .good),
                 HorizonEvent(tag: "FLOORS", title: "Basic vacuuming", timeAnchor: "In 12 Days", repeatCount: 2, repeatUnit: .week, healthState: .good),
+                HorizonEvent(tag: "WINDOWS", title: "Wipe interior windows", timeAnchor: "In 21 Days", repeatCount: 3, repeatUnit: .week, healthState: .good),
                 HorizonEvent(tag: "STORAGE", title: "Tidy up boxes", timeAnchor: "In 28 Days", repeatCount: 1, repeatUnit: .month, healthState: .good),
-                HorizonEvent(tag: "BATH", title: "Clean bathtub", timeAnchor: "In 28 Days", repeatCount: 1, repeatUnit: .month, healthState: .good)
+                HorizonEvent(tag: "BATH", title: "Clean bathtub", timeAnchor: "In 28 Days", repeatCount: 1, repeatUnit: .month, healthState: .good),
+                HorizonEvent(tag: "APPLIANCE", title: "Sanitize washer drum", timeAnchor: "In 60 Days", repeatCount: 2, repeatUnit: .month, healthState: .good)
             ],
             telemetryMetrics: [],
             historyRecords: [
@@ -60,7 +63,7 @@ public enum PreviewData {
                 HistoryRecord(jobId: sinkId, title: "Sanitize sink & drain", tag: "PLUMBING", completedAt: relativeDate(daysAgo: 5, hour: 20, minute: 15)),
                 HistoryRecord(jobId: kitchenId, title: "Deep clean countertops", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 6, hour: 8, minute: 45))
             ],
-            customTags: ["KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING", "PANTRY", "BREWING", "BODY", "MIND", "PLANTS", "WASTE", "STORAGE", "BATH"]
+            customTags: ["KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING", "PANTRY", "BREWING", "BODY", "MIND", "PLANTS", "WASTE", "STORAGE", "BATH", "WATER", "WINDOWS"]
         )
     }()
 }

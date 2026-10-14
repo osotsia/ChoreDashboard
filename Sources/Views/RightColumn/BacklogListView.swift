@@ -28,10 +28,53 @@ public struct BacklogListView: View {
         self.onEditUpcomingEvent = onEditUpcomingEvent
     }
 
+    private var totalInventoryCount: Int {
+        focusJobs.count + upcomingEvents.count + baselineTasks.count
+    }
+
+    private var sortedEvents: [HorizonEvent] {
+        upcomingEvents.sorted {
+            if $0.estimatedDaysRemaining != $1.estimatedDaysRemaining {
+                return $0.estimatedDaysRemaining < $1.estimatedDaysRemaining
+            }
+            return $0.title < $1.title
+        }
+    }
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: 20 * s) {
-            // SECTION 1: MAIN TASKS
-            sectionBlock(title: "01 · MAIN TASKS", count: focusJobs.count) {
+        VStack(alignment: .leading, spacing: 18 * s) {
+            // INVENTORY FORMULA TELEMETRY BANNER
+            VStack(alignment: .leading, spacing: 4 * s) {
+                Text("TOTAL TASK INVENTORY: \(totalInventoryCount)")
+                    .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
+                    .tracking(1.2 * s)
+                    .foregroundColor(.black)
+
+                HStack(spacing: 4 * s) {
+                    Text("\(focusJobs.count) TODAY")
+                        .font(.system(size: 8.5 * s, weight: .bold))
+                    Text("+")
+                        .font(.system(size: 8.5 * s, weight: .bold))
+                    Text("\(upcomingEvents.count) HORIZON")
+                        .font(.system(size: 8.5 * s, weight: .bold))
+                    Text("+")
+                        .font(.system(size: 8.5 * s, weight: .bold))
+                    Text("\(baselineTasks.count) DAILY")
+                        .font(.system(size: 8.5 * s, weight: .bold))
+                    Spacer()
+                }
+                .foregroundColor(AppConfig.Colors.subtextGrey)
+            }
+            .padding(8 * s)
+            .background(Color.white)
+            .border(AppConfig.Colors.lineGrey, width: 1 * s)
+
+            // SECTION 1: ACTIVE TODAY (FOCUS OPERATIONS)
+            sectionBlock(
+                title: "01 · ACTIVE TODAY (FOCUS QUEUE)",
+                subtitle: "NON-ROUTINE · DUE TODAY",
+                count: focusJobs.count
+            ) {
                 ForEach(focusJobs) { job in
                     let isEditing = highlightedId == job.id
                     VStack(alignment: .leading, spacing: 3 * s) {
@@ -41,9 +84,9 @@ public struct BacklogListView: View {
                                 .tracking(1.0 * s)
                                 .foregroundColor(AppConfig.Colors.subtextGrey)
                             Spacer()
-                            Text("FOCUS OPERATION")
+                            Text(job.isOverdue ? "OVERDUE" : "TODAY")
                                 .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
-                                .foregroundColor(AppConfig.Colors.subtextGrey)
+                                .foregroundColor(job.isOverdue ? .red : AppConfig.Colors.subtextGrey)
                         }
 
                         Text(job.title)
@@ -71,9 +114,13 @@ public struct BacklogListView: View {
                 }
             }
 
-            // SECTION 2: UPCOMING HORIZON
-            sectionBlock(title: "02 · UPCOMING HORIZON", count: upcomingEvents.count) {
-                ForEach(upcomingEvents) { event in
+            // SECTION 2: HORIZON QUEUE (SCHEDULED AHEAD)
+            sectionBlock(
+                title: "02 · HORIZON QUEUE (SCHEDULED AHEAD)",
+                subtitle: "CADENCE HORIZON · RECURRING (>1 DAY)",
+                count: upcomingEvents.count
+            ) {
+                ForEach(sortedEvents) { event in
                     let isEditing = highlightedId == event.id
                     VStack(alignment: .leading, spacing: 3 * s) {
                         HStack {
@@ -112,8 +159,12 @@ public struct BacklogListView: View {
                 }
             }
 
-            // SECTION 3: DAILY BASELINE
-            sectionBlock(title: "03 · DAILY BASELINE", count: baselineTasks.count) {
+            // SECTION 3: DAILY BASELINE (24-HOUR RESET)
+            sectionBlock(
+                title: "03 · DAILY BASELINE (24-HOUR CADENCE)",
+                subtitle: "HABITS & DAILY UPKEEP",
+                count: baselineTasks.count
+            ) {
                 ForEach(baselineTasks) { task in
                     let isEditing = highlightedId == task.id
                     VStack(alignment: .leading, spacing: 3 * s) {
@@ -170,14 +221,22 @@ public struct BacklogListView: View {
     @ViewBuilder
     private func sectionBlock<Content: View>(
         title: String,
+        subtitle: String,
         count: Int,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 6 * s) {
             HStack {
-                SectionBadge(text: title)
-                    .foregroundColor(.black)
+                VStack(alignment: .leading, spacing: 1 * s) {
+                    SectionBadge(text: title)
+                        .foregroundColor(.black)
+                    Text(subtitle.uppercased())
+                        .font(.system(size: 7.5 * s, weight: .bold))
+                        .foregroundColor(AppConfig.Colors.subtextGrey)
+                }
+
                 Spacer()
+
                 Text("\(count) ITEMS")
                     .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
                     .tracking(1.0 * s)

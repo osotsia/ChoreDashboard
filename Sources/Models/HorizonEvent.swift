@@ -27,6 +27,18 @@ public struct HorizonEvent: Identifiable, Codable, Equatable {
         self.healthState = healthState
     }
 
+    public var estimatedDaysRemaining: Int {
+        let intervalDays = repeatUnit.days(count: repeatCount)
+        switch healthState {
+        case .overdue, .due:
+            return 0
+        case .notYet:
+            return max(1, intervalDays / 2)
+        case .good:
+            return max(1, intervalDays)
+        }
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, tag, title, timeAnchor, repeatCount, repeatUnit, healthState
     }

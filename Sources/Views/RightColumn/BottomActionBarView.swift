@@ -1,4 +1,3 @@
-// Sources/Views/RightColumn/BottomActionBarView.swift
 import SwiftUI
 
 public struct BottomActionBarView: View {
@@ -7,7 +6,7 @@ public struct BottomActionBarView: View {
 
     public var body: some View {
         HStack(spacing: 2 * s) {
-            // 1. New (Active Creation Trigger)
+            // 1. New (Creation Trigger)
             RibbonActionButton(
                 icon: "plus.circle",
                 label: "NEW",
@@ -20,20 +19,20 @@ public struct BottomActionBarView: View {
                 }
             }
 
-            // 2. Upcoming
+            // 2. Status (Bird's Eye + Next Up)
             RibbonActionButton(
-                icon: "calendar",
-                label: "UPCOMING",
-                isSelected: store.activeRightTab == .upcoming
+                icon: "gauge.with.needle",
+                label: "STATUS",
+                isSelected: store.activeRightTab == .status
             ) {
-                if store.activeRightTab != .upcoming {
+                if store.activeRightTab != .status {
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.selectRightTab(.upcoming)
+                        store.selectRightTab(.status)
                     }
                 }
             }
 
-            // 3. Backlog
+            // 3. Backlog (Master Inventory)
             RibbonActionButton(
                 icon: "tray.full",
                 label: "BACKLOG",
