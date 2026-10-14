@@ -1,4 +1,3 @@
-// --- File: Sources/Models/DashboardState.swift ---
 import Foundation
 
 public struct DashboardState: Codable {
@@ -65,21 +64,16 @@ public struct DashboardState: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
         self.schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-
         self.focusOverline = try container.decodeIfPresent(String.self, forKey: .focusOverline)
             ?? (try container.decodeIfPresent(String.self, forKey: .zoneLabel))
             ?? "SCHEDULED OPERATIONS"
-
         self.focusTitle = try container.decodeIfPresent(String.self, forKey: .focusTitle)
             ?? (try container.decodeIfPresent(String.self, forKey: .heroTitle))
             ?? "Main Tasks"
-
         self.focusSubtitle = try container.decodeIfPresent(String.self, forKey: .focusSubtitle)
             ?? (try container.decodeIfPresent(String.self, forKey: .heroSubtitle))
             ?? "Targeted deep maintenance · Non-routine upkeep"
-
         self.heroTools = try container.decodeIfPresent(String.self, forKey: .heroTools)
             ?? "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit."
 
@@ -87,7 +81,7 @@ public struct DashboardState: Codable {
             self.focusJobs = rawJobs
         } else if let legacyHeroTasks = try container.decodeIfPresent([ChoreItem].self, forKey: .heroTasks) {
             self.focusJobs = legacyHeroTasks.map {
-                FocusJob(id: $0.id, tag: "TASK", title: $0.title, notes: "")
+                FocusJob(id: $0.id, tag: "TASK", title: $0.title)
             }
         } else {
             self.focusJobs = []

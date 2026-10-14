@@ -1,4 +1,3 @@
-// --- File: Sources/Store/DashboardStore.swift ---
 import SwiftUI
 import Observation
 import CryptoKit
@@ -24,16 +23,19 @@ public enum EditableTaskTarget: Identifiable, Equatable {
         }
     }
 
-    public static func == (lhs: EditableTaskTarget, rhs: EditableTaskTarget) -> Bool {
-        switch (lhs, rhs) {
-        case (.focus(let a), .focus(let b)):
-            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.notes == b.notes && a.isCompleted == b.isCompleted && a.isOverdue == b.isOverdue
-        case (.baseline(let a), .baseline(let b)):
-            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.durationMinutes == b.durationMinutes && a.isCompleted == b.isCompleted
-        case (.horizon(let a), .horizon(let b)):
-            return a.id == b.id && a.title == b.title && a.tag == b.tag && a.notes == b.notes && a.timeAnchor == b.timeAnchor && a.repeatCount == b.repeatCount && a.repeatUnit == b.repeatUnit && a.healthState == b.healthState
-        default:
-            return false
+    public var title: String {
+        switch self {
+        case .focus(let j): return j.title
+        case .baseline(let c): return c.title
+        case .horizon(let h): return h.title
+        }
+    }
+
+    public var tag: String {
+        switch self {
+        case .focus(let j): return j.tag
+        case .baseline(let c): return c.tag
+        case .horizon(let h): return h.tag
         }
     }
 }
@@ -54,8 +56,7 @@ public enum CadenceUnit: String, CaseIterable, Codable {
     }
 
     public func displayString(count: Int) -> String {
-        if count == 1 { return rawValue }
-        return "\(rawValue)s"
+        count == 1 ? rawValue : "\(rawValue)s"
     }
 
     public func next() -> CadenceUnit {
@@ -139,10 +140,7 @@ private actor StatePersistenceEngine {
         do {
             let data = try Data(contentsOf: storageURL)
             let checksum = SHA256.hash(data: data)
-
-            if let last = lastPersistedChecksum, checksum == last {
-                return nil
-            }
+            if let last = lastPersistedChecksum, checksum == last { return nil }
 
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
@@ -171,35 +169,19 @@ public final class DashboardStore {
 
     public var availableTags: [String] {
         var tags = Set<String>()
-
         let sanitize: (String) -> String = { raw in
-            let clean = raw.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
-            return clean.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            raw.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
+                .trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         }
 
-        for tag in state.customTags {
-            let t = sanitize(tag)
-            if !t.isEmpty { tags.insert(t) }
-        }
-        for job in state.focusJobs {
-            let t = sanitize(job.tag)
-            if !t.isEmpty { tags.insert(t) }
-        }
-        for task in state.baselineTasks {
-            let t = sanitize(task.tag)
-            if !t.isEmpty { tags.insert(t) }
-        }
-        for event in state.upcomingEvents {
-            let t = sanitize(event.tag)
-            if !t.isEmpty { tags.insert(t) }
-        }
-        for record in state.historyRecords {
-            let t = sanitize(record.tag)
-            if !t.isEmpty { tags.insert(t) }
-        }
+        for tag in state.customTags { tags.insert(sanitize(tag)) }
+        for job in state.focusJobs { tags.insert(sanitize(job.tag)) }
+        for task in state.baselineTasks { tags.insert(sanitize(task.tag)) }
+        for event in state.upcomingEvents { tags.insert(sanitize(event.tag)) }
+        for record in state.historyRecords { tags.insert(sanitize(record.tag)) }
 
-        let sorted = tags.sorted()
-        return sorted.isEmpty ? ["KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING"] : sorted
+        let clean = tags.filter { !$0.isEmpty }.sorted()
+        return clean.isEmpty ? ["KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING"] : clean
     }
 
     private var watcher: DirectoryWatcher?
@@ -216,19 +198,10 @@ public final class DashboardStore {
         if let initial = Self.loadInitialBlocking(from: fileURL) {
             self.state = initial
         } else {
-            if FileManager.default.fileExists(atPath: fileURL.path) {
-                let backupURL = fileURL.deletingPathExtension()
-                    .appendingPathExtension("corrupt.\(Int(Date().timeIntervalSince1970)).json")
-                try? FileManager.default.copyItem(at: fileURL, to: backupURL)
-                print("[DashboardStore] Corrupted state.json preserved to \(backupURL.lastPathComponent)")
-            }
-
             let fallback = PreviewData.defaultState
             self.state = fallback
             if !FileManager.default.fileExists(atPath: fileURL.path) {
-                Task {
-                    await engine.write(fallback)
-                }
+                Task { await engine.write(fallback) }
             }
         }
 
@@ -244,11 +217,9 @@ public final class DashboardStore {
 
     public func selectRightTab(_ tab: RightPanelTab) {
         guard tab != activeRightTab else { return }
-
         if activeRightTab == .edit && tab != .edit {
             editingTarget = nil
         }
-
         if activeRightTab != .create && activeRightTab != .edit {
             previousRightTab = activeRightTab
         }
@@ -262,10 +233,6 @@ public final class DashboardStore {
     public func dismissEditTask() {
         editingTarget = nil
         activeRightTab = previousRightTab
-    }
-
-    public func toggleBacklog() {
-        selectRightTab(activeRightTab == .backlog ? .upcoming : .backlog)
     }
 
     public func startEditing(focusJob: FocusJob) {
@@ -287,20 +254,13 @@ public final class DashboardStore {
         target: EditableTaskTarget,
         title: String,
         tag: String,
-        notes: String,
         durationMinutes: Int,
         isOneTime: Bool,
         repeatCount: Int,
         repeatUnit: CadenceUnit,
         healthState: TaskHealthState
     ) {
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         let targetId = target.id
-
-        addCustomTag(cleanTag)
-
         let originalCompleted: Bool
         switch target {
         case .focus(let job):
@@ -314,55 +274,17 @@ public final class DashboardStore {
             state.upcomingEvents.removeAll(where: { $0.id == targetId })
         }
 
-        if healthState == .due || healthState == .overdue {
-            if !isOneTime && repeatUnit == .day && repeatCount == 1 {
-                let task = ChoreItem(
-                    id: targetId,
-                    title: cleanTitle,
-                    durationMinutes: durationMinutes,
-                    tag: cleanTag,
-                    isCompleted: originalCompleted
-                )
-                state.baselineTasks.append(task)
-            } else {
-                let job = FocusJob(
-                    id: targetId,
-                    tag: cleanTag,
-                    title: cleanTitle,
-                    notes: cleanNotes,
-                    isCompleted: originalCompleted,
-                    isOverdue: healthState == .overdue
-                )
-                state.focusJobs.append(job)
-            }
-        } else {
-            let intervalDays = isOneTime ? 7 : repeatUnit.days(count: repeatCount)
-            let daysUntilDue = (healthState == .good) ? max(1, intervalDays) : max(1, intervalDays / 2)
-            let timeAnchor: String
-            if daysUntilDue == 1 {
-                timeAnchor = "In 1 Day"
-            } else if daysUntilDue < 14 {
-                timeAnchor = "In \(daysUntilDue) Days"
-            } else if daysUntilDue < 60 {
-                let weeks = max(1, daysUntilDue / 7)
-                timeAnchor = "In \(weeks) Weeks (\(daysUntilDue)d)"
-            } else {
-                let months = max(1, daysUntilDue / 30)
-                timeAnchor = "In \(months) Months (\(daysUntilDue)d)"
-            }
-
-            let event = HorizonEvent(
-                id: targetId,
-                tag: cleanTag,
-                title: cleanTitle,
-                notes: cleanNotes,
-                timeAnchor: timeAnchor,
-                repeatCount: repeatCount,
-                repeatUnit: repeatUnit,
-                healthState: healthState
-            )
-            state.upcomingEvents.append(event)
-        }
+        routeTaskAssignment(
+            id: targetId,
+            title: title,
+            tag: tag,
+            durationMinutes: durationMinutes,
+            isOneTime: isOneTime,
+            repeatCount: repeatCount,
+            repeatUnit: repeatUnit,
+            healthState: healthState,
+            isCompleted: originalCompleted
+        )
 
         dismissEditTask()
         persistAsync()
@@ -371,113 +293,42 @@ public final class DashboardStore {
     public func deleteTask(target: EditableTaskTarget) {
         let targetId = target.id
         switch target {
-        case .focus:
-            state.focusJobs.removeAll(where: { $0.id == targetId })
-        case .baseline:
-            state.baselineTasks.removeAll(where: { $0.id == targetId })
-        case .horizon:
-            state.upcomingEvents.removeAll(where: { $0.id == targetId })
+        case .focus:    state.focusJobs.removeAll(where: { $0.id == targetId })
+        case .baseline: state.baselineTasks.removeAll(where: { $0.id == targetId })
+        case .horizon:  state.upcomingEvents.removeAll(where: { $0.id == targetId })
         }
         dismissEditTask()
-        persistAsync()
-    }
-
-    public func addCustomTag(_ tag: String) {
-        let clean = tag.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased()
-
-        guard !clean.isEmpty else { return }
-
-        if !state.customTags.contains(clean) {
-            state.customTags.append(clean)
-            persistAsync()
-        }
-    }
-
-    public func deleteCustomTag(_ tag: String) {
-        let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        state.customTags.removeAll(where: { $0.uppercased() == clean })
         persistAsync()
     }
 
     public func dispatchConfiguredTask(
         title: String,
         tag: String,
-        notes: String,
         durationMinutes: Int,
         isOneTime: Bool,
         repeatCount: Int,
         repeatUnit: CadenceUnit,
         healthState: TaskHealthState
     ) {
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let cleanNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         let newId = UUID()
-
-        addCustomTag(cleanTag)
-
-        if healthState == .due || healthState == .overdue {
-            if !isOneTime && repeatUnit == .day && repeatCount == 1 {
-                let task = ChoreItem(
-                    id: newId,
-                    title: cleanTitle,
-                    durationMinutes: durationMinutes,
-                    tag: cleanTag,
-                    isCompleted: false
-                )
-                state.baselineTasks.append(task)
-            } else {
-                let job = FocusJob(
-                    id: newId,
-                    tag: cleanTag,
-                    title: cleanTitle,
-                    notes: cleanNotes,
-                    isCompleted: false,
-                    isOverdue: healthState == .overdue
-                )
-                state.focusJobs.append(job)
-            }
-            persistAsync()
-            return
-        }
-
-        let intervalDays = isOneTime ? 7 : repeatUnit.days(count: repeatCount)
-        let daysUntilDue = (healthState == .good) ? max(1, intervalDays) : max(1, intervalDays / 2)
-
-        let timeAnchor: String
-        if daysUntilDue == 1 {
-            timeAnchor = "In 1 Day"
-        } else if daysUntilDue < 14 {
-            timeAnchor = "In \(daysUntilDue) Days"
-        } else if daysUntilDue < 60 {
-            let weeks = max(1, daysUntilDue / 7)
-            timeAnchor = "In \(weeks) Weeks (\(daysUntilDue)d)"
-        } else {
-            let months = max(1, daysUntilDue / 30)
-            timeAnchor = "In \(months) Months (\(daysUntilDue)d)"
-        }
-
-        let event = HorizonEvent(
+        routeTaskAssignment(
             id: newId,
-            tag: cleanTag,
-            title: cleanTitle,
-            notes: cleanNotes,
-            timeAnchor: timeAnchor,
+            title: title,
+            tag: tag,
+            durationMinutes: durationMinutes,
+            isOneTime: isOneTime,
             repeatCount: repeatCount,
             repeatUnit: repeatUnit,
-            healthState: healthState
+            healthState: healthState,
+            isCompleted: false
         )
-        state.upcomingEvents.append(event)
 
         if healthState == .good {
             let record = HistoryRecord(
                 jobId: newId,
-                title: cleanTitle,
-                tag: cleanTag,
-                completedAt: Date(),
-                note: cleanNotes.isEmpty ? "Initial cycle state registered as completed." : cleanNotes
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                tag: tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+                completedAt: Date()
             )
             state.historyRecords.insert(record, at: 0)
         }
@@ -485,100 +336,139 @@ public final class DashboardStore {
         persistAsync()
     }
 
-    public func addFocusJob(title: String, tag: String, notes: String) {
-        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let job = FocusJob(
-            tag: cleanTag.isEmpty ? "OPERATION" : cleanTag,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            isCompleted: false
-        )
-        state.focusJobs.append(job)
-        persistAsync()
-    }
-
-    public func addBaselineTask(title: String, tag: String, durationMinutes: Int) {
-        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let task = ChoreItem(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            durationMinutes: max(1, durationMinutes),
-            tag: cleanTag.isEmpty ? "GENERAL" : cleanTag,
-            isCompleted: false
-        )
-        state.baselineTasks.append(task)
-        persistAsync()
-    }
-
-    public func addUpcomingEvent(
+    private func routeTaskAssignment(
+        id: UUID,
         title: String,
         tag: String,
-        notes: String,
-        timeAnchor: String,
-        repeatCount: Int = 1,
-        repeatUnit: CadenceUnit = .month,
-        healthState: TaskHealthState = .good
+        durationMinutes: Int,
+        isOneTime: Bool,
+        repeatCount: Int,
+        repeatUnit: CadenceUnit,
+        healthState: TaskHealthState,
+        isCompleted: Bool
     ) {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        let cleanAnchor = timeAnchor.trimmingCharacters(in: .whitespacesAndNewlines)
-        let event = HorizonEvent(
-            id: UUID(),
-            tag: cleanTag.isEmpty ? "SCHEDULED" : cleanTag,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            timeAnchor: cleanAnchor.isEmpty ? "Upcoming" : cleanAnchor,
-            repeatCount: repeatCount,
-            repeatUnit: repeatUnit,
-            healthState: healthState
-        )
-        state.upcomingEvents.append(event)
+        addCustomTag(cleanTag)
+
+        if healthState == .due || healthState == .overdue {
+            if !isOneTime && repeatUnit == .day && repeatCount == 1 {
+                let task = ChoreItem(
+                    id: id,
+                    title: cleanTitle,
+                    durationMinutes: durationMinutes,
+                    tag: cleanTag,
+                    isCompleted: isCompleted
+                )
+                state.baselineTasks.append(task)
+            } else {
+                let job = FocusJob(
+                    id: id,
+                    tag: cleanTag,
+                    title: cleanTitle,
+                    isCompleted: isCompleted,
+                    isOverdue: healthState == .overdue
+                )
+                state.focusJobs.append(job)
+            }
+        } else {
+            let intervalDays = isOneTime ? 7 : repeatUnit.days(count: repeatCount)
+            let daysUntilDue = (healthState == .good) ? max(1, intervalDays) : max(1, intervalDays / 2)
+            let timeAnchor = Self.computeTimeAnchor(daysUntilDue: daysUntilDue)
+
+            let event = HorizonEvent(
+                id: id,
+                tag: cleanTag,
+                title: cleanTitle,
+                timeAnchor: timeAnchor,
+                repeatCount: repeatCount,
+                repeatUnit: repeatUnit,
+                healthState: healthState
+            )
+            state.upcomingEvents.append(event)
+        }
+    }
+
+    public static func computeTimeAnchor(daysUntilDue: Int) -> String {
+        if daysUntilDue == 1 {
+            return "In 1 Day"
+        } else if daysUntilDue < 14 {
+            return "In \(daysUntilDue) Days"
+        } else if daysUntilDue < 60 {
+            let weeks = max(1, daysUntilDue / 7)
+            return "In \(weeks) Weeks (\(daysUntilDue)d)"
+        } else {
+            let months = max(1, daysUntilDue / 30)
+            return "In \(months) Months (\(daysUntilDue)d)"
+        }
+    }
+
+    public func addCustomTag(_ tag: String) {
+        let clean = tag.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
+            .trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !clean.isEmpty else { return }
+        if !state.customTags.contains(clean) {
+            state.customTags.append(clean)
+            persistAsync()
+        }
+    }
+
+    public func deleteTag(_ tag: String) {
+        let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !clean.isEmpty else { return }
+
+        // 1. Remove from explicit custom tags registry
+        state.customTags.removeAll(where: { $0.uppercased() == clean })
+
+        // 2. Cascade fallback tag onto existing references to prevent availableTags re-derivation
+        let fallbackTag = clean == "GENERAL" ? "OPERATIONS" : "GENERAL"
+
+        for i in state.focusJobs.indices {
+            if state.focusJobs[i].tag.uppercased() == clean {
+                state.focusJobs[i].tag = fallbackTag
+            }
+        }
+        for i in state.baselineTasks.indices {
+            if state.baselineTasks[i].tag.uppercased() == clean {
+                state.baselineTasks[i].tag = fallbackTag
+            }
+        }
+        for i in state.upcomingEvents.indices {
+            if state.upcomingEvents[i].tag.uppercased() == clean {
+                state.upcomingEvents[i].tag = fallbackTag
+            }
+        }
+        for i in state.historyRecords.indices {
+            if state.historyRecords[i].tag.uppercased() == clean {
+                state.historyRecords[i].tag = fallbackTag
+            }
+        }
+
         persistAsync()
+    }
+
+    /// Backwards compatibility alias
+    public func deleteCustomTag(_ tag: String) {
+        deleteTag(tag)
     }
 
     public func toggleFocusJob(id: UUID) {
         guard let idx = state.focusJobs.firstIndex(where: { $0.id == id }) else { return }
         state.focusJobs[idx].isCompleted.toggle()
-        let isNowCompleted = state.focusJobs[idx].isCompleted
         let job = state.focusJobs[idx]
-
-        syncHistoryRecord(
-            taskId: job.id,
-            title: job.title,
-            tag: job.tag,
-            note: job.notes,
-            isCompleted: isNowCompleted
-        )
+        syncHistoryRecord(taskId: job.id, title: job.title, tag: job.tag, isCompleted: job.isCompleted)
     }
 
     public func toggleBaselineTask(id: UUID) {
         guard let idx = state.baselineTasks.firstIndex(where: { $0.id == id }) else { return }
         state.baselineTasks[idx].isCompleted.toggle()
-        let isNowCompleted = state.baselineTasks[idx].isCompleted
         let task = state.baselineTasks[idx]
-
-        syncHistoryRecord(
-            taskId: task.id,
-            title: task.title,
-            tag: task.tag,
-            note: "Daily baseline standard routine.",
-            isCompleted: isNowCompleted
-        )
+        syncHistoryRecord(taskId: task.id, title: task.title, tag: task.tag, isCompleted: task.isCompleted)
     }
 
-    private func syncHistoryRecord(
-        taskId: UUID,
-        title: String,
-        tag: String,
-        note: String,
-        isCompleted: Bool
-    ) {
+    private func syncHistoryRecord(taskId: UUID, title: String, tag: String, isCompleted: Bool) {
         if isCompleted {
-            let record = HistoryRecord(
-                jobId: taskId,
-                title: title,
-                tag: tag,
-                completedAt: Date(),
-                note: note
-            )
+            let record = HistoryRecord(jobId: taskId, title: title, tag: tag, completedAt: Date())
             state.historyRecords.insert(record, at: 0)
         } else {
             if let recordIdx = state.historyRecords.firstIndex(where: { $0.jobId == taskId }) {
@@ -605,9 +495,7 @@ public final class DashboardStore {
 
     private func persistAsync() {
         let snapshot = state
-        Task {
-            await persistenceEngine.write(snapshot)
-        }
+        Task { await persistenceEngine.write(snapshot) }
     }
 
     private static func loadInitialBlocking(from url: URL) -> DashboardState? {
@@ -618,7 +506,7 @@ public final class DashboardStore {
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode(DashboardState.self, from: data)
         } catch {
-            print("[DashboardStore] Synchronous initial load failed: \(error)")
+            print("[DashboardStore] Synchronous load failed: \(error)")
             return nil
         }
     }

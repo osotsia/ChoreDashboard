@@ -7,13 +7,9 @@ public struct FocusJobTile: View {
     public var onEdit: (() -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
-    private var hasSubtitleComment: Bool {
-        !job.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header Row: System Tag + Monochrome Alert Indicator + Checkbox
+            // Header Row: System Tag + Overdue Indicator + Checkbox
             HStack(alignment: .center, spacing: 6 * s) {
                 Text(job.tag.uppercased())
                     .font(.system(size: 10 * s, weight: .bold))
@@ -59,22 +55,11 @@ public struct FocusJobTile: View {
                 .lineSpacing(1.5 * s)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, hasSubtitleComment ? 6 * s : 0)
-
-            // Contextual Subtitle / Notes
-            if hasSubtitleComment {
-                Text(job.notes)
-                    .font(.system(size: 12 * s, weight: .medium))
-                    .foregroundColor(job.isCompleted ? Color.white.opacity(0.3) : Color.white.opacity(0.85))
-                    .lineSpacing(1.5 * s)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
 
             Spacer(minLength: 0)
         }
         .padding(14 * s)
-        .frame(maxWidth: .infinity, minHeight: 120 * s, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 88 * s, alignment: .topLeading)
         .background(
             isHighlighted
                 ? Color.white.opacity(0.12)

@@ -1,7 +1,6 @@
-// --- File: Sources/Models/ChoreItem.swift ---
 import Foundation
 
-public struct ChoreItem: Identifiable, Codable {
+public struct ChoreItem: Identifiable, Codable, Equatable {
     public let id: UUID
     public var title: String
     public var durationMinutes: Int

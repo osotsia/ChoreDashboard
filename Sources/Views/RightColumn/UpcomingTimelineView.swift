@@ -1,4 +1,3 @@
-// --- File: Sources/Views/RightColumn/UpcomingTimelineView.swift ---
 import SwiftUI
 
 public struct UpcomingTimelineView: View {
@@ -39,14 +38,6 @@ public struct UpcomingTimelineView: View {
                         .foregroundColor(.black)
                         .padding(.top, 1 * s)
 
-                    if !event.notes.isEmpty {
-                        Text(event.notes)
-                            .font(.system(size: 11 * s, weight: .regular))
-                            .foregroundColor(AppConfig.Colors.subtextGrey)
-                            .lineSpacing(1.5 * s)
-                            .padding(.top, 1 * s)
-                    }
-
                     Rectangle()
                         .fill(AppConfig.Colors.lineGrey)
                         .frame(height: 0.8 * s)
@@ -59,9 +50,7 @@ public struct UpcomingTimelineView: View {
                 .contentShape(Rectangle())
                 .contextMenu {
                     if let onEdit = onEdit {
-                        Button {
-                            onEdit(event)
-                        } label: {
+                        Button { onEdit(event) } label: {
                             Label("Edit", systemImage: "pencil")
                         }
                     }

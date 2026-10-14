@@ -1,4 +1,3 @@
-// --- File: Sources/Views/DashboardView.swift ---
 import SwiftUI
 
 private struct LeftColumnAdaptiveLayout: Layout {
@@ -12,9 +11,7 @@ private struct LeftColumnAdaptiveLayout: Layout {
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         guard subviews.count >= 2 else {
-            for subview in subviews {
-                subview.place(at: bounds.origin, proposal: proposal)
-            }
+            for subview in subviews { subview.place(at: bounds.origin, proposal: proposal) }
             return
         }
 
@@ -66,10 +63,9 @@ public struct DashboardView: View {
                         switch store.activeRightTab {
                         case .create:
                             VStack(spacing: 0) {
-                                CreateTaskHeaderView()
-
+                                PanelHeaderView(title: "TASK ENTRY DISPATCH", badgeText: "NEW OPERATION", badgeIcon: "plus.circle")
                                 ScrollView(.vertical) {
-                                    CreateTaskView(store: store)
+                                    TaskEditorView(store: store, mode: .create)
                                         .padding(.horizontal, 24 * scalar)
                                         .padding(.top, 16 * scalar)
                                         .padding(.bottom, 24 * scalar)
@@ -81,10 +77,9 @@ public struct DashboardView: View {
                         case .edit:
                             if let target = store.editingTarget {
                                 VStack(spacing: 0) {
-                                    EditTaskHeaderView()
-
+                                    PanelHeaderView(title: "TASK MODIFICATION", badgeText: "EDIT OPERATION", badgeIcon: "pencil")
                                     ScrollView(.vertical) {
-                                        EditTaskView(store: store, target: target)
+                                        TaskEditorView(store: store, mode: .edit(target))
                                             .padding(.horizontal, 24 * scalar)
                                             .padding(.top, 16 * scalar)
                                             .padding(.bottom, 24 * scalar)
@@ -96,8 +91,7 @@ public struct DashboardView: View {
 
                         case .upcoming:
                             VStack(spacing: 0) {
-                                UpcomingHeaderView()
-
+                                PanelHeaderView(title: "UPCOMING & HORIZON", badgeText: "CADENCE QUEUE", badgeIcon: "calendar")
                                 ScrollView(.vertical) {
                                     UpcomingTimelineView(
                                         events: store.state.upcomingEvents,
@@ -118,8 +112,7 @@ public struct DashboardView: View {
 
                         case .backlog:
                             VStack(spacing: 0) {
-                                BacklogHeaderView(count: totalBacklogCount)
-
+                                PanelHeaderView(title: "OPERATIONAL BACKLOG", badgeText: "ALL ITEMS (\(totalBacklogCount))", badgeIcon: "tray.full")
                                 ScrollView(.vertical) {
                                     BacklogListView(
                                         focusJobs: store.state.focusJobs,
@@ -152,8 +145,7 @@ public struct DashboardView: View {
 
                         case .history:
                             VStack(spacing: 0) {
-                                HistoryHeaderView(count: store.state.historyRecords.count)
-
+                                PanelHeaderView(title: "OPERATIONAL HISTORY", badgeText: "LOGGED (\(store.state.historyRecords.count))", badgeIcon: "clock.arrow.circlepath")
                                 ScrollView(.vertical) {
                                     HistoryTimelineView(records: store.state.historyRecords)
                                         .padding(.horizontal, 24 * scalar)

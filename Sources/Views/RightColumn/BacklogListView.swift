@@ -1,4 +1,3 @@
-// --- File: Sources/Views/RightColumn/BacklogListView.swift ---
 import SwiftUI
 
 public struct BacklogListView: View {
@@ -52,14 +51,6 @@ public struct BacklogListView: View {
                             .foregroundColor(.black)
                             .padding(.top, 1 * s)
 
-                        if !job.notes.isEmpty {
-                            Text(job.notes)
-                                .font(.system(size: 11 * s, weight: .regular))
-                                .foregroundColor(AppConfig.Colors.subtextGrey)
-                                .lineSpacing(1.5 * s)
-                                .padding(.top, 1 * s)
-                        }
-
                         Rectangle()
                             .fill(AppConfig.Colors.lineGrey)
                             .frame(height: 0.8 * s)
@@ -72,9 +63,7 @@ public struct BacklogListView: View {
                     .contentShape(Rectangle())
                     .contextMenu {
                         if let onEditFocusJob = onEditFocusJob {
-                            Button {
-                                onEditFocusJob(job)
-                            } label: {
+                            Button { onEditFocusJob(job) } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
                         }
@@ -103,14 +92,6 @@ public struct BacklogListView: View {
                             .foregroundColor(.black)
                             .padding(.top, 1 * s)
 
-                        if !event.notes.isEmpty {
-                            Text(event.notes)
-                                .font(.system(size: 11 * s, weight: .regular))
-                                .foregroundColor(AppConfig.Colors.subtextGrey)
-                                .lineSpacing(1.5 * s)
-                                .padding(.top, 1 * s)
-                        }
-
                         Rectangle()
                             .fill(AppConfig.Colors.lineGrey)
                             .frame(height: 0.8 * s)
@@ -123,9 +104,7 @@ public struct BacklogListView: View {
                     .contentShape(Rectangle())
                     .contextMenu {
                         if let onEditUpcomingEvent = onEditUpcomingEvent {
-                            Button {
-                                onEditUpcomingEvent(event)
-                            } label: {
+                            Button { onEditUpcomingEvent(event) } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
                         }
@@ -177,9 +156,7 @@ public struct BacklogListView: View {
                     .contentShape(Rectangle())
                     .contextMenu {
                         if let onEditBaselineTask = onEditBaselineTask {
-                            Button {
-                                onEditBaselineTask(task)
-                            } label: {
+                            Button { onEditBaselineTask(task) } label: {
                                 Label("Edit", systemImage: "pencil")
                             }
                         }
@@ -200,9 +177,7 @@ public struct BacklogListView: View {
             HStack {
                 SectionBadge(text: title)
                     .foregroundColor(.black)
-
                 Spacer()
-
                 Text("\(count) ITEMS")
                     .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
                     .tracking(1.0 * s)

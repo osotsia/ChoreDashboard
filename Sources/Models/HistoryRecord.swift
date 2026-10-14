@@ -1,32 +1,28 @@
-// --- File: Sources/Models/HistoryRecord.swift ---
 import Foundation
 
-public struct HistoryRecord: Identifiable, Codable {
+public struct HistoryRecord: Identifiable, Codable, Equatable {
     public let id: UUID
     public var jobId: UUID?
     public var title: String
     public var tag: String
     public var completedAt: Date
-    public var note: String
 
     public init(
         id: UUID = UUID(),
         jobId: UUID? = nil,
         title: String,
         tag: String,
-        completedAt: Date = Date(),
-        note: String = ""
+        completedAt: Date = Date()
     ) {
         self.id = id
         self.jobId = jobId
         self.title = title
         self.tag = tag
         self.completedAt = completedAt
-        self.note = note
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, jobId, title, tag, completedAt, note
+        case id, jobId, title, tag, completedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -36,7 +32,6 @@ public struct HistoryRecord: Identifiable, Codable {
         self.title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
         self.tag = try container.decodeIfPresent(String.self, forKey: .tag) ?? "GENERAL"
         self.completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt) ?? Date()
-        self.note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -46,6 +41,5 @@ public struct HistoryRecord: Identifiable, Codable {
         try container.encode(title, forKey: .title)
         try container.encode(tag, forKey: .tag)
         try container.encode(completedAt, forKey: .completedAt)
-        try container.encode(note, forKey: .note)
     }
 }

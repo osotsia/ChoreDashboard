@@ -1,25 +1,28 @@
-// --- File: Sources/Views/RightColumn/CreateTaskView.swift ---
 import SwiftUI
 
-public struct CreateTaskView: View {
+public enum TaskEditorMode {
+    case create
+    case edit(EditableTaskTarget)
+}
+
+public struct TaskEditorView: View {
     public var store: DashboardStore
+    public let mode: TaskEditorMode
     @Environment(\.scaleFactor) private var s
-
-    @State private var isOneTime: Bool = false
-    @State private var repeatCount: Int = 1
-    @State private var repeatUnit: CadenceUnit = .month
-    @State private var durationMinutes: Int = 15
-
-    @State private var selectedState: TaskHealthState = .good
 
     @State private var title: String = ""
     @State private var selectedTag: String = ""
     @State private var isCreatingCustomTag: Bool = false
     @State private var customTagText: String = ""
-    @State private var notes: String = ""
+    @State private var isOneTime: Bool = false
+    @State private var repeatCount: Int = 1
+    @State private var repeatUnit: CadenceUnit = .month
+    @State private var durationMinutes: Int = 15
+    @State private var selectedState: TaskHealthState = .good
 
-    public init(store: DashboardStore) {
+    public init(store: DashboardStore, mode: TaskEditorMode) {
         self.store = store
+        self.mode = mode
     }
 
     private var effectiveTag: String {
@@ -30,9 +33,7 @@ public struct CreateTaskView: View {
     }
 
     private var isValid: Bool {
-        let hasTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasTag = !effectiveTag.isEmpty
-        return hasTitle && hasTag
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !effectiveTag.isEmpty
     }
 
     private var routingInfo: (icon: String, text: String, isImmediate: Bool) {
@@ -48,12 +49,12 @@ public struct CreateTaskView: View {
         let intervalDays = repeatUnit.days(count: repeatCount)
         switch selectedState {
         case .overdue:
-            return ("exclamationmark.triangle.fill", "Overdue: Added to Today's Focus Queue as high priority.", true)
+            return ("exclamationmark.triangle.fill", "Overdue hazard: Assigned high priority on Active Focus.", true)
         case .due:
             if repeatUnit == .day && repeatCount == 1 {
-                return ("checklist", "Daily routine: Added directly to Daily Baseline (\(durationMinutes) min).", true)
+                return ("checklist", "Daily routine: Assigned to Daily Baseline (\(durationMinutes) min).", true)
             }
-            return ("bolt.fill", "Due today: Added directly to Today's Focus Queue.", true)
+            return ("bolt.fill", "Due today: Active on Today's Focus Queue.", true)
         case .notYet:
             let daysLeft = max(1, intervalDays / 2)
             return ("clock", "In progress: Estimated due in ~\(daysLeft) days (Upcoming Horizon).", false)
@@ -71,30 +72,44 @@ public struct CreateTaskView: View {
         isCreatingCustomTag = false
     }
 
-    private func commitTask() {
+    private func commit() {
         guard isValid else { return }
-
         if isCreatingCustomTag && !customTagText.isEmpty {
             confirmCustomTag()
         }
 
-        store.dispatchConfiguredTask(
-            title: title,
-            tag: effectiveTag,
-            notes: notes,
-            durationMinutes: durationMinutes,
-            isOneTime: isOneTime,
-            repeatCount: repeatCount,
-            repeatUnit: repeatUnit,
-            healthState: selectedState
-        )
-
-        cancelOut()
+        switch mode {
+        case .create:
+            store.dispatchConfiguredTask(
+                title: title,
+                tag: effectiveTag,
+                durationMinutes: durationMinutes,
+                isOneTime: isOneTime,
+                repeatCount: repeatCount,
+                repeatUnit: repeatUnit,
+                healthState: selectedState
+            )
+            cancelOut()
+        case .edit(let target):
+            store.applyEditedTask(
+                target: target,
+                title: title,
+                tag: effectiveTag,
+                durationMinutes: durationMinutes,
+                isOneTime: isOneTime,
+                repeatCount: repeatCount,
+                repeatUnit: repeatUnit,
+                healthState: selectedState
+            )
+        }
     }
 
     private func cancelOut() {
         withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-            store.dismissCreateTask()
+            switch mode {
+            case .create: store.dismissCreateTask()
+            case .edit:   store.dismissEditTask()
+            }
         }
     }
 
@@ -133,42 +148,49 @@ public struct CreateTaskView: View {
                 ) {
                     ForEach(store.availableTags, id: \.self) { tag in
                         let isSelected = !isCreatingCustomTag && selectedTag == tag
-                        Button(action: {
-                            isCreatingCustomTag = false
-                            selectedTag = tag
-                        }) {
-                            Text(tag)
-                                .font(.system(size: 9.5 * s, weight: .bold))
-                                .tracking(0.8 * s)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 28 * s)
-                                .background(isSelected ? Color.black : Color.white)
-                                .foregroundColor(isSelected ? .white : Color.black)
-                                .clipShape(RoundedRectangle(cornerRadius: 5 * s))
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 5 * s)
+                                .fill(isSelected ? Color.black : Color.white)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 5 * s)
                                         .strokeBorder(isSelected ? Color.black : Color.black.opacity(0.15), lineWidth: 1 * s)
                                 )
+
+                            Text(tag)
+                                .font(.system(size: 9.5 * s, weight: .bold))
+                                .tracking(0.8 * s)
+                                .lineLimit(1)
+                                .foregroundColor(isSelected ? .white : Color.black)
+                                .padding(.horizontal, 4 * s)
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28 * s)
+                        .contentShape(RoundedRectangle(cornerRadius: 5 * s))
+                        .onTapGesture {
+                            isCreatingCustomTag = false
+                            selectedTag = tag
+                        }
                         .contextMenu {
-                            if store.state.customTags.contains(tag) {
-                                Button(role: .destructive) {
-                                    store.deleteCustomTag(tag)
-                                    if selectedTag == tag {
-                                        selectedTag = store.availableTags.first ?? ""
-                                    }
-                                } label: {
-                                    Label("Delete Tag", systemImage: "trash")
+                            Button(role: .destructive) {
+                                store.deleteTag(tag)
+                                if selectedTag == tag {
+                                    selectedTag = store.availableTags.first ?? "GENERAL"
                                 }
+                            } label: {
+                                Label("Delete Tag \"\(tag)\"", systemImage: "trash")
                             }
                         }
                     }
 
-                    Button(action: {
-                        isCreatingCustomTag = true
-                    }) {
+                    // Add Custom Tag Trigger
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 5 * s)
+                            .fill(isCreatingCustomTag ? Color.black : Color.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 5 * s)
+                                    .strokeBorder(isCreatingCustomTag ? Color.black : Color.black.opacity(0.2), lineWidth: 1 * s)
+                            )
+
                         HStack(spacing: 3 * s) {
                             Image(systemName: "plus")
                                 .font(.system(size: 8 * s, weight: .black))
@@ -176,17 +198,14 @@ public struct CreateTaskView: View {
                                 .font(.system(size: 9.5 * s, weight: .bold))
                                 .tracking(0.8 * s)
                         }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 28 * s)
-                        .background(isCreatingCustomTag ? Color.black : Color.white)
                         .foregroundColor(isCreatingCustomTag ? .white : Color.black)
-                        .clipShape(RoundedRectangle(cornerRadius: 5 * s))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 5 * s)
-                                .strokeBorder(isCreatingCustomTag ? Color.black : Color.black.opacity(0.2), lineWidth: 1 * s)
-                        )
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28 * s)
+                    .contentShape(RoundedRectangle(cornerRadius: 5 * s))
+                    .onTapGesture {
+                        isCreatingCustomTag = true
+                    }
                 }
 
                 if isCreatingCustomTag {
@@ -388,7 +407,6 @@ public struct CreateTaskView: View {
                                 Text(state.rawValue)
                                     .font(.system(size: 10 * s, weight: .black))
                                     .tracking(0.5 * s)
-
                                 Text(state.subtitle)
                                     .font(.system(size: 7.5 * s, weight: .bold))
                                     .opacity(isSelected ? 0.75 : 0.6)
@@ -423,30 +441,13 @@ public struct CreateTaskView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6 * s))
             }
 
-            // 5. Run Notes / Specs
-            VStack(alignment: .leading, spacing: 6 * s) {
-                Text("OPERATIONAL CONTEXT / NOTES (OPTIONAL)")
-                    .font(.system(size: 10 * s, weight: .bold))
-                    .tracking(1.4 * s)
-                    .foregroundColor(AppConfig.Colors.subtextGrey)
-
-                TextField("Tools required, specific detergents, specs", text: $notes)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 11 * s, weight: .regular))
-                    .padding(.horizontal, 10 * s)
-                    .padding(.vertical, 8 * s)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 6 * s))
-                    .overlay(RoundedRectangle(cornerRadius: 6 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
-            }
-
-            // 6. Execution Dock
+            // 5. Execution Dock
             VStack(spacing: 8 * s) {
-                Button(action: commitTask) {
+                Button(action: commit) {
                     HStack(spacing: 6 * s) {
-                        Image(systemName: "plus")
+                        Image(systemName: isEditMode ? "checkmark" : "plus")
                             .font(.system(size: 10 * s, weight: .black))
-                        Text("DISPATCH TASK TO BOARD")
+                        Text(isEditMode ? "SAVE MODIFICATIONS" : "DISPATCH TASK TO BOARD")
                             .font(.system(size: 11 * s, weight: .bold))
                             .tracking(1.4 * s)
                     }
@@ -470,20 +471,80 @@ public struct CreateTaskView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.escape, modifiers: [])
+
+                if case .edit(let target) = mode {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                            store.deleteTask(target: target)
+                        }
+                    }) {
+                        HStack(spacing: 4 * s) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10 * s))
+                            Text("DELETE TASK")
+                                .font(.system(size: 9.5 * s, weight: .bold))
+                                .tracking(1.0 * s)
+                        }
+                        .foregroundColor(Color.red.opacity(0.85))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28 * s)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2 * s)
+                }
             }
             .padding(.top, 4 * s)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onExitCommand(perform: cancelOut)
         .onAppear {
+            seedInitialValues()
+        }
+    }
+
+    private var isEditMode: Bool {
+        if case .edit = mode { return true }
+        return false
+    }
+
+    private func seedInitialValues() {
+        switch mode {
+        case .create:
             if selectedTag.isEmpty, let firstTag = store.availableTags.first {
                 selectedTag = firstTag
+            }
+        case .edit(let target):
+            switch target {
+            case .focus(let job):
+                title = job.title
+                selectedTag = job.tag.uppercased()
+                durationMinutes = 15
+                isOneTime = false
+                repeatCount = 1
+                repeatUnit = .week
+                selectedState = job.isOverdue ? .overdue : (job.isCompleted ? .good : .due)
+            case .baseline(let task):
+                title = task.title
+                selectedTag = task.tag.uppercased()
+                durationMinutes = task.durationMinutes
+                isOneTime = false
+                repeatCount = 1
+                repeatUnit = .day
+                selectedState = task.isCompleted ? .good : .due
+            case .horizon(let event):
+                title = event.title
+                selectedTag = event.tag.uppercased()
+                durationMinutes = 15
+                isOneTime = false
+                repeatCount = event.repeatCount
+                repeatUnit = event.repeatUnit
+                selectedState = event.healthState
             }
         }
     }
 }
 
-// MARK: - Animated Segmented Runway Gauge
+// MARK: - Runway Gauge & Reusable Button Styles
 public struct HealthRunwayGauge: View {
     public let state: TaskHealthState
     public let s: CGFloat
@@ -492,8 +553,6 @@ public struct HealthRunwayGauge: View {
         self.state = state
         self.s = s
     }
-
-    private var totalSegments: Int { 4 }
 
     private var filledSegments: Int {
         switch state {
@@ -506,14 +565,10 @@ public struct HealthRunwayGauge: View {
 
     private var stateColor: Color {
         switch state {
-        case .good:
-            return Color(red: 16/255, green: 185/255, blue: 129/255)
-        case .notYet:
-            return Color(red: 234/255, green: 179/255, blue: 8/255)
-        case .due:
-            return Color(red: 249/255, green: 115/255, blue: 22/255)
-        case .overdue:
-            return Color(red: 239/255, green: 68/255, blue: 68/255)
+        case .good:    return Color(red: 16/255, green: 185/255, blue: 129/255)
+        case .notYet:  return Color(red: 234/255, green: 179/255, blue: 8/255)
+        case .due:     return Color(red: 249/255, green: 115/255, blue: 22/255)
+        case .overdue: return Color(red: 239/255, green: 68/255, blue: 68/255)
         }
     }
 
@@ -545,21 +600,17 @@ public struct HealthRunwayGauge: View {
                             .font(.system(size: 8 * s, weight: .black))
                             .foregroundColor(stateColor)
                     }
-                    .transition(.opacity.combined(with: .scale))
                 }
             }
 
             HStack(spacing: 3 * s) {
-                ForEach(0..<totalSegments, id: \.self) { index in
+                ForEach(0..<4, id: \.self) { index in
                     let isFilled = index < filledSegments
                     RoundedRectangle(cornerRadius: 1.5 * s)
                         .fill(isFilled ? stateColor : stateColor.opacity(0.12))
                         .overlay(
                             RoundedRectangle(cornerRadius: 1.5 * s)
-                                .strokeBorder(
-                                    isFilled ? stateColor.opacity(0.4) : Color.clear,
-                                    lineWidth: 0.5 * s
-                                )
+                                .strokeBorder(isFilled ? stateColor.opacity(0.4) : Color.clear, lineWidth: 0.5 * s)
                         )
                 }
             }
@@ -577,19 +628,11 @@ public struct HealthRunwayGauge: View {
     }
 }
 
-// MARK: - Reusable Styles
 public struct CadenceTypeTab: View {
     let title: String
     let isSelected: Bool
     let s: CGFloat
     let action: () -> Void
-
-    public init(title: String, isSelected: Bool, s: CGFloat, action: @escaping () -> Void) {
-        self.title = title
-        self.isSelected = isSelected
-        self.s = s
-        self.action = action
-    }
 
     public var body: some View {
         Button(action: action) {
@@ -609,7 +652,6 @@ public struct CadenceTypeTab: View {
 
 public struct SubtlePressStyle: ButtonStyle {
     public init() {}
-
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(configuration.isPressed ? Color.black.opacity(0.06) : Color.clear)

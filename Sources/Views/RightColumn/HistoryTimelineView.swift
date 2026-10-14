@@ -1,4 +1,3 @@
-// --- File: Sources/Views/RightColumn/HistoryTimelineView.swift ---
 import SwiftUI
 
 public struct HistoryTimelineView: View {
@@ -56,10 +55,6 @@ public struct HistoryTimelineView: View {
         }
     }
 
-    private func formatTime(_ date: Date) -> String {
-        Self.timeFormatter.string(from: date).uppercased()
-    }
-
     public var body: some View {
         VStack(alignment: .leading, spacing: 18 * s) {
             if groupedDays.isEmpty {
@@ -82,9 +77,7 @@ public struct HistoryTimelineView: View {
                                 .font(.system(size: 10 * s, weight: .bold))
                                 .tracking(1.5 * s)
                                 .foregroundColor(.black)
-
                             Spacer()
-
                             Text("\(group.records.count) DONE")
                                 .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
                                 .tracking(1.0 * s)
@@ -102,10 +95,8 @@ public struct HistoryTimelineView: View {
                                         .font(.system(size: 10 * s, weight: .bold))
                                         .tracking(1.0 * s)
                                         .foregroundColor(AppConfig.Colors.subtextGrey)
-
                                     Spacer()
-
-                                    Text(formatTime(record.completedAt))
+                                    Text(Self.timeFormatter.string(from: record.completedAt).uppercased())
                                         .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
                                         .foregroundColor(.black)
                                 }
@@ -114,14 +105,6 @@ public struct HistoryTimelineView: View {
                                     .font(.system(size: 14 * s, weight: .bold))
                                     .foregroundColor(.black)
                                     .padding(.top, 1 * s)
-
-                                if !record.note.isEmpty {
-                                    Text(record.note)
-                                        .font(.system(size: 11 * s, weight: .regular))
-                                        .foregroundColor(AppConfig.Colors.subtextGrey)
-                                        .lineSpacing(1.5 * s)
-                                        .padding(.top, 1 * s)
-                                }
 
                                 Rectangle()
                                     .fill(AppConfig.Colors.lineGrey)
