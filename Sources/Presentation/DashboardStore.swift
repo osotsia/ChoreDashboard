@@ -1,4 +1,3 @@
-// Sources/Store/DashboardStore.swift
 import SwiftUI
 import Observation
 import CryptoKit
@@ -11,36 +10,6 @@ public enum RightPanelTab: String, Codable, Sendable {
     case history
     case create
     case edit
-}
-
-// MARK: - Operational Snapshot
-public struct TodayOperationalSnapshot: Sendable {
-    public let focusTotal: Int
-    public let focusCompleted: Int
-    public let focusOverdue: Int
-    public let focusRemaining: Int
-
-    public let baselineTotal: Int
-    public let baselineCompleted: Int
-    public let baselineRemaining: Int
-    public let baselineMinutesRemaining: Int
-
-    public let totalTasks: Int
-    public let completedTasks: Int
-    public let clearanceRate: Double
-}
-
-// MARK: - Monthly Pacing Snapshot (Race Telemetry)
-public struct MonthlyPacingSnapshot: Sendable {
-    public let monthTitle: String
-    public let currentDay: Int
-    public let totalDaysInMonth: Int
-    public let actualCompleted: Int
-    public let totalMonthlyQuota: Int
-    public let deltaLead: Int
-    public let actualProgressRatio: Double
-    public let expectedProgressRatio: Double
-    public let isLeading: Bool
 }
 
 // MARK: - Task Draft Model (Centralized Form State)
@@ -203,6 +172,7 @@ public final class DashboardStore {
     public private(set) var previousRightTab: RightPanelTab = .status
     public var taskDraft: TaskDraft? = nil
 
+    private let clock: Clock = SystemClock()
     private var watcher: DirectoryWatcher?
     private let persistenceEngine: StatePersistenceEngine
     private var persistTask: Task<Void, Never>?
@@ -255,176 +225,43 @@ public final class DashboardStore {
     }
 
     // MARK: - Recurrence Rollover Engine
-    public func rolloverRecurringTasksIfNeeded(referenceDate: Date = Date()) {
-        let calendar = Calendar.current
-        var didMutate = false
-
-        for i in state.tasks.indices {
-            guard let recurrence = state.tasks[i].recurrence else { continue }
-            guard state.tasks[i].isCompleted, let completedAt = state.tasks[i].lastCompletedAt else { continue }
-
-            if !calendar.isDateInToday(completedAt) {
-                state.tasks[i].isCompleted = false
-                if !state.tasks[i].isDailyBaseline {
-                    let intervalDays = recurrence.intervalDays
-                    state.tasks[i].dueDate = calendar.date(byAdding: .day, value: intervalDays, to: completedAt) ?? state.tasks[i].dueDate
-                }
-                didMutate = true
-            }
-        }
-
-        if didMutate {
+    public func rolloverRecurringTasksIfNeeded() {
+        if ChoreEngine.rollover(state: &state, clock: clock) {
             persistAsync()
         }
     }
 
     // MARK: - Stateless Projections
     public var baselineTasks: [TaskItem] {
-        state.tasks.filter { $0.isDailyBaseline }
+        ChoreProjections.baselineTasks(for: state)
     }
 
     public var baselineTotalMinutes: Int {
-        baselineTasks.reduce(0) { $0 + $1.durationMinutes }
+        ChoreProjections.baselineTotalMinutes(for: state)
     }
 
     public var focusQueue: [TaskItem] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-
-        return state.tasks.filter { task in
-            guard !task.isDailyBaseline else { return false }
-
-            let taskDue = calendar.startOfDay(for: task.dueDate)
-            let isOverdueOrDueToday = taskDue <= today
-
-            if task.isCompleted {
-                if let completedAt = task.lastCompletedAt {
-                    return calendar.isDateInToday(completedAt)
-                }
-                return isOverdueOrDueToday
-            }
-            return isOverdueOrDueToday
-        }
+        ChoreProjections.focusQueue(for: state, clock: clock)
     }
 
     public var upcomingEvents: [TaskItem] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-
-        return state.tasks.filter { task in
-            guard !task.isDailyBaseline else { return false }
-            let taskDue = calendar.startOfDay(for: task.dueDate)
-            return taskDue > today && !task.isCompleted
-        }
+        ChoreProjections.upcomingEvents(for: state, clock: clock)
     }
 
     public var sortedUpcomingEvents: [TaskItem] {
-        upcomingEvents.sorted {
-            let days0 = $0.estimatedDaysRemaining()
-            let days1 = $1.estimatedDaysRemaining()
-            if days0 != days1 { return days0 < days1 }
-            return $0.title < $1.title
-        }
+        ChoreProjections.sortedUpcomingEvents(for: state, clock: clock)
     }
 
     public var todaySnapshot: TodayOperationalSnapshot {
-        let fQueue = focusQueue
-        let fTotal = fQueue.count
-        let fDone = fQueue.filter { $0.isCompleted }.count
-        let fOverdue = fQueue.filter { $0.healthState() == .overdue && !$0.isCompleted }.count
-        let fRemaining = fTotal - fDone
-
-        let bTasks = baselineTasks
-        let bTotal = bTasks.count
-        let bDone = bTasks.filter { $0.isCompleted }.count
-        let bRemaining = bTotal - bDone
-        let bMinsLeft = bTasks.filter { !$0.isCompleted }.reduce(0) { $0 + $1.durationMinutes }
-
-        let total = fTotal + bTotal
-        let completed = fDone + bDone
-        let rate = total > 0 ? Double(completed) / Double(total) : 1.0
-
-        return TodayOperationalSnapshot(
-            focusTotal: fTotal,
-            focusCompleted: fDone,
-            focusOverdue: fOverdue,
-            focusRemaining: fRemaining,
-            baselineTotal: bTotal,
-            baselineCompleted: bDone,
-            baselineRemaining: bRemaining,
-            baselineMinutesRemaining: bMinsLeft,
-            totalTasks: total,
-            completedTasks: completed,
-            clearanceRate: rate
-        )
+        ChoreProjections.todaySnapshot(for: state, clock: clock)
     }
 
-    /// Dynamic Monthly Pacing Telemetry ("Race of the Month")
     public var monthlyPacing: MonthlyPacingSnapshot {
-        let calendar = Calendar.current
-        let now = Date()
-
-        let monthFormatter = DateFormatter()
-        monthFormatter.dateFormat = "LLLL"
-        let monthTitle = monthFormatter.string(from: now).uppercased()
-
-        let totalDays = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
-        let currentDay = calendar.component(.day, from: now)
-        let timeElapsedRatio = min(1.0, Double(currentDay) / Double(totalDays))
-
-        // 1. Calculate Monthly Maintenance Quota (Qm)
-        // Excludes 24-hour daily baseline routines to prevent inflating the monthly upkeep bar by 93 tasks.
-        var maintenanceQuota: Double = 0
-        for task in state.tasks where !task.isDailyBaseline {
-            if let recurrence = task.recurrence {
-                let intervalDays = max(1, recurrence.intervalDays)
-                let runsPerMonth = Double(totalDays) / Double(intervalDays)
-                maintenanceQuota += runsPerMonth
-            } else {
-                maintenanceQuota += 1 // One-time task
-            }
-        }
-
-        // Fallback for edge cases where the user only has daily baseline tasks
-        if maintenanceQuota == 0 {
-            maintenanceQuota = Double(max(1, baselineTasks.count * totalDays))
-        }
-
-        let totalMonthlyQuota = max(1, Int(round(maintenanceQuota)))
-
-        // 2. Count actual completions logged in the current calendar month
-        let completionsThisMonth = state.historyRecords.filter { record in
-            calendar.isDate(record.completedAt, equalTo: now, toGranularity: .month) &&
-            calendar.isDate(record.completedAt, equalTo: now, toGranularity: .year)
-        }.count
-
-        // 3. Expected maintenance completions based on elapsed time
-        let expected = Double(totalMonthlyQuota) * timeElapsedRatio
-        let delta = completionsThisMonth - Int(round(expected))
-
-        let actualRatio = min(1.0, Double(completionsThisMonth) / Double(totalMonthlyQuota))
-
-        return MonthlyPacingSnapshot(
-            monthTitle: monthTitle,
-            currentDay: currentDay,
-            totalDaysInMonth: totalDays,
-            actualCompleted: completionsThisMonth,
-            totalMonthlyQuota: totalMonthlyQuota,
-            deltaLead: delta,
-            actualProgressRatio: actualRatio,
-            expectedProgressRatio: timeElapsedRatio,
-            isLeading: delta >= 0
-        )
+        ChoreProjections.monthlyPacing(for: state, clock: clock)
     }
 
     public var availableTags: [String] {
-        var tags = Set<String>()
-        for tag in state.customTags { tags.insert(tag) }
-        for task in state.tasks { tags.insert(task.tag) }
-        for record in state.historyRecords { tags.insert(record.tag) }
-
-        let clean = tags.filter { !$0.isEmpty }.sorted()
-        return clean.isEmpty ? ["KITCHEN", "BATHROOM", "GENERAL", "SELF"] : clean
+        ChoreProjections.availableTags(for: state)
     }
 
     // MARK: - Navigation Control
@@ -474,176 +311,72 @@ public final class DashboardStore {
         let cleanTag = draft.tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !cleanTitle.isEmpty, !cleanTag.isEmpty else { return }
 
-        addCustomTag(cleanTag)
-
         let recurrence: RecurrenceRule? = draft.isOneTime
             ? nil
             : RecurrenceRule(count: draft.repeatCount, unit: draft.repeatUnit)
 
-        let calendar = Calendar.current
-        let today = Date()
         let resolvedDueDate: Date
-
-        if draft.isOneTime {
-            if draft.initialHealthState == .overdue {
-                resolvedDueDate = calendar.date(byAdding: .day, value: -1, to: today) ?? today
-            } else if draft.initialHealthState == .due {
-                resolvedDueDate = today
-            } else {
-                let intervalDays = draft.repeatUnit.days(count: draft.repeatCount)
-                resolvedDueDate = calendar.date(byAdding: .day, value: max(1, intervalDays), to: today) ?? today
-            }
+        if !draft.isNew,
+           let existing = state.tasks.first(where: { $0.id == draft.id }),
+           existing.healthState(using: clock) == draft.initialHealthState && existing.recurrence == recurrence {
+            resolvedDueDate = existing.dueDate
         } else {
-            let computeDateForHealth: (TaskHealthState) -> Date = { health in
-                let interval = recurrence?.intervalDays ?? 7
-                switch health {
-                case .overdue:
-                    return calendar.date(byAdding: .day, value: -1, to: today) ?? today
-                case .due:
-                    return today
-                case .halfway:
-                    return calendar.date(byAdding: .day, value: max(1, interval / 2), to: today) ?? today
-                case .notYet:
-                    return calendar.date(byAdding: .day, value: max(1, Int(round(Double(interval) * 0.75))), to: today) ?? today
-                case .good:
-                    return calendar.date(byAdding: .day, value: max(1, interval), to: today) ?? today
-                }
-            }
-
-            if draft.isNew {
-                resolvedDueDate = computeDateForHealth(draft.initialHealthState)
-            } else if let existing = state.tasks.first(where: { $0.id == draft.id }),
-                      existing.healthState() == draft.initialHealthState && existing.recurrence == recurrence {
-                resolvedDueDate = existing.dueDate
-            } else {
-                resolvedDueDate = computeDateForHealth(draft.initialHealthState)
-            }
-        }
-
-        if draft.isNew {
-            let newTask = TaskItem(
-                id: draft.id,
-                title: cleanTitle,
-                tag: cleanTag,
-                durationMinutes: draft.durationMinutes,
-                isCompleted: false,
-                dueDate: resolvedDueDate,
-                lastCompletedAt: nil,
-                recurrence: recurrence
+            resolvedDueDate = ChoreEngine.calculateDueDate(
+                health: draft.initialHealthState,
+                recurrence: recurrence,
+                isOneTime: draft.isOneTime,
+                repeatCount: draft.repeatCount,
+                repeatUnit: draft.repeatUnit,
+                clock: clock
             )
-            state.tasks.append(newTask)
-        } else {
-            if let idx = state.tasks.firstIndex(where: { $0.id == draft.id }) {
-                state.tasks[idx].title = cleanTitle
-                state.tasks[idx].tag = cleanTag
-                state.tasks[idx].durationMinutes = draft.durationMinutes
-                state.tasks[idx].recurrence = recurrence
-                state.tasks[idx].dueDate = resolvedDueDate
-            }
         }
 
+        let task = TaskItem(
+            id: draft.id,
+            title: cleanTitle,
+            tag: cleanTag,
+            durationMinutes: draft.durationMinutes,
+            isCompleted: false,
+            dueDate: resolvedDueDate,
+            lastCompletedAt: nil,
+            recurrence: recurrence
+        )
+
+        ChoreEngine.upsertTask(state: &state, task: task)
         dismissDraft()
         persistAsync()
     }
 
     public func deleteTask(id: UUID) {
-        state.tasks.removeAll(where: { $0.id == id })
+        ChoreEngine.deleteTask(state: &state, id: id)
         dismissDraft()
         persistAsync()
     }
 
     // MARK: - Task Execution & Completion
     public func toggleTask(id: UUID) {
-        guard let idx = state.tasks.firstIndex(where: { $0.id == id }) else { return }
-        state.tasks[idx].isCompleted.toggle()
-        let task = state.tasks[idx]
-
-        if task.isCompleted {
-            state.tasks[idx].lastCompletedAt = Date()
-            let record = HistoryRecord(
-                taskId: task.id,
-                title: task.title,
-                tag: task.tag,
-                completedAt: Date()
-            )
-            state.historyRecords.insert(record, at: 0)
-        } else {
-            if let recordIdx = state.historyRecords.firstIndex(where: { $0.taskId == task.id }) {
-                state.historyRecords.remove(at: recordIdx)
-            }
-        }
+        ChoreEngine.toggleTask(state: &state, id: id, clock: clock)
         persistAsync()
     }
 
     public func completeHorizonTask(id: UUID) {
-        guard let idx = state.tasks.firstIndex(where: { $0.id == id }) else { return }
-        let task = state.tasks[idx]
-
-        let record = HistoryRecord(
-            taskId: task.id,
-            title: task.title,
-            tag: task.tag,
-            completedAt: Date()
-        )
-        state.historyRecords.insert(record, at: 0)
-
-        if task.isOneTime {
-            state.tasks.remove(at: idx)
-        } else {
-            let intervalDays = task.recurrence?.intervalDays ?? 7
-            let nextDue = Calendar.current.date(byAdding: .day, value: intervalDays, to: Date()) ?? Date()
-            state.tasks[idx].dueDate = nextDue
-            state.tasks[idx].lastCompletedAt = Date()
-            state.tasks[idx].isCompleted = false
-        }
+        ChoreEngine.completeHorizonTask(state: &state, id: id, clock: clock)
         persistAsync()
     }
 
-    /// Resets daily baseline chores and removes today's baseline completions from history.
     public func resetDailyBaseline() {
-        let calendar = Calendar.current
-        let baselineTaskIds = Set(state.tasks.filter { $0.isDailyBaseline }.map { $0.id })
-
-        // 1. Uncheck baseline chores and clear today's lastCompletedAt
-        for idx in state.tasks.indices where state.tasks[idx].isDailyBaseline {
-            state.tasks[idx].isCompleted = false
-            if let last = state.tasks[idx].lastCompletedAt, calendar.isDateInToday(last) {
-                state.tasks[idx].lastCompletedAt = nil
-            }
-        }
-
-        // 2. Wipe today's history records for these daily baseline tasks
-        state.historyRecords.removeAll { record in
-            guard let taskId = record.taskId, baselineTaskIds.contains(taskId) else { return false }
-            return calendar.isDateInToday(record.completedAt)
-        }
-
+        ChoreEngine.resetDailyBaseline(state: &state, clock: clock)
         persistAsync()
     }
 
     // MARK: - Tag Management
     public func addCustomTag(_ tag: String) {
-        let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !clean.isEmpty else { return }
-        if !state.customTags.contains(clean) {
-            state.customTags.append(clean)
-            persistAsync()
-        }
+        ChoreEngine.addCustomTag(state: &state, tag: tag)
+        persistAsync()
     }
 
     public func deleteTag(_ tag: String) {
-        let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !clean.isEmpty else { return }
-
-        state.customTags.removeAll(where: { $0.uppercased() == clean })
-        let fallbackTag = clean == "GENERAL" ? "OPERATIONS" : "GENERAL"
-
-        for i in state.tasks.indices where state.tasks[i].tag.uppercased() == clean {
-            state.tasks[i].tag = fallbackTag
-        }
-        for i in state.historyRecords.indices where state.historyRecords[i].tag.uppercased() == clean {
-            state.historyRecords[i].tag = fallbackTag
-        }
+        ChoreEngine.deleteTag(state: &state, tag: tag)
         persistAsync()
     }
 
