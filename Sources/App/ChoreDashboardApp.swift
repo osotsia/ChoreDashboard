@@ -1,31 +1,6 @@
 import SwiftUI
 import AppKit
 
-private final class AspectLockView: NSView {
-    var ratio: CGSize = .zero
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard let window = window, ratio.width > 0, ratio.height > 0 else { return }
-        window.aspectRatio = NSSize(width: ratio.width, height: ratio.height)
-        window.minSize = NSSize(width: ratio.width, height: ratio.height)
-    }
-}
-
-private struct WindowAspectLock: NSViewRepresentable {
-    let ratio: CGSize
-
-    func makeNSView(context: Context) -> AspectLockView {
-        let view = AspectLockView()
-        view.ratio = ratio
-        return view
-    }
-
-    func updateNSView(_ nsView: AspectLockView, context: Context) {
-        nsView.ratio = ratio
-    }
-}
-
 @main
 struct ChoreDashboardApp: App {
     @State private var store = DashboardStore()
@@ -34,14 +9,13 @@ struct ChoreDashboardApp: App {
     var body: some Scene {
         Window("Chore Dashboard", id: "dashboard") {
             DashboardView(store: store)
-                .background(WindowAspectLock(ratio: AppConfig.aspectRatio))
                 .frame(
                     minWidth: AppConfig.baseWidth,
                     minHeight: AppConfig.baseHeight
                 )
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.automatic)
+        .windowResizability(.contentMinSize)
 
         MenuBarExtra("Chore Dashboard", systemImage: "checklist") {
             Button("Show Dashboard") {

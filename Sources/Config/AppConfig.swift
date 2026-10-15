@@ -6,7 +6,6 @@ public enum AppConfig {
     public static let baseWidth: CGFloat = 1100
     public static let baseHeight: CGFloat = 850
     public static let splitRatio: CGFloat = 0.65 // Left = 65%, Right = 35%
-    public static let aspectRatio = CGSize(width: 1100, height: 850)
     
     /// Top padding inset applied to views bordering the top window chrome
     /// to prevent collision with macOS traffic lights when using .hiddenTitleBar.
