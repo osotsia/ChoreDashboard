@@ -1,6 +1,5 @@
 import SwiftUI
 import Observation
-import CryptoKit
 import UniformTypeIdentifiers
 
 // MARK: - Navigation Tabs
@@ -95,74 +94,6 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
     }
 }
 
-// MARK: - File System Observer
-private final class DirectoryWatcher: @unchecked Sendable {
-    private var source: DispatchSourceFileSystemObject?
-    private var descriptor: Int32 = -1
-
-    init?(directoryURL: URL, onChange: @escaping @Sendable () -> Void) {
-        let descriptor = open(directoryURL.path, O_EVTONLY)
-        guard descriptor >= 0 else { return nil }
-        self.descriptor = descriptor
-
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: descriptor,
-            eventMask: [.write],
-            queue: DispatchQueue.global(qos: .utility)
-        )
-
-        source.setEventHandler { onChange() }
-        source.setCancelHandler { close(descriptor) }
-        source.resume()
-        self.source = source
-    }
-
-    deinit {
-        source?.cancel()
-    }
-}
-
-// MARK: - Actor-Bound Persistence Engine
-private actor StatePersistenceEngine {
-    private let storageURL: URL
-    private var lastPersistedChecksum: SHA256Digest?
-
-    init(storageURL: URL) {
-        self.storageURL = storageURL
-    }
-
-    func write(_ state: DashboardState) {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(state)
-            self.lastPersistedChecksum = SHA256.hash(data: data)
-            try data.write(to: storageURL, options: .atomic)
-        } catch {
-            print("[StatePersistenceEngine] Failed to write state: \(error)")
-        }
-    }
-
-    func evaluateExternalChange() -> DashboardState? {
-        guard FileManager.default.fileExists(atPath: storageURL.path) else { return nil }
-        do {
-            let data = try Data(contentsOf: storageURL)
-            let checksum = SHA256.hash(data: data)
-            if let last = lastPersistedChecksum, checksum == last { return nil }
-
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            let loaded = try decoder.decode(DashboardState.self, from: data)
-            self.lastPersistedChecksum = checksum
-            return loaded
-        } catch {
-            print("[StatePersistenceEngine] Failed to decode external state: \(error)")
-            return nil
-        }
-    }
-}
-
 // MARK: - Observable Dashboard Store
 @Observable
 @MainActor
@@ -174,7 +105,7 @@ public final class DashboardStore {
 
     private let clock: Clock = SystemClock()
     private var watcher: DirectoryWatcher?
-    private let persistenceEngine: StatePersistenceEngine
+    private let persistenceClient: FilePersistenceClient
     private var persistTask: Task<Void, Never>?
 
     public init() {
@@ -182,16 +113,16 @@ public final class DashboardStore {
         let fileURL = AppConfig.storageURL
         try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
-        let engine = StatePersistenceEngine(storageURL: fileURL)
-        self.persistenceEngine = engine
+        let client = FilePersistenceClient(storageURL: fileURL)
+        self.persistenceClient = client
 
-        if let initial = Self.loadInitialBlocking(from: fileURL) {
+        if let initial = FilePersistenceClient.loadInitialBlocking(from: fileURL) {
             self.state = initial
         } else {
             let fallback = PreviewData.defaultState
             self.state = fallback
             if !FileManager.default.fileExists(atPath: fileURL.path) {
-                Task { await engine.write(fallback) }
+                Task { try? await client.save(fallback) }
             }
         }
 
@@ -200,7 +131,7 @@ public final class DashboardStore {
         self.watcher = DirectoryWatcher(directoryURL: directoryURL) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                if let updated = await self.persistenceEngine.evaluateExternalChange() {
+                if let updated = try? await self.persistenceClient.evaluateExternalChange() {
                     self.state = updated
                     self.rolloverRecurringTasksIfNeeded()
                 }
@@ -382,7 +313,7 @@ public final class DashboardStore {
 
     public func reloadFromDisk() {
         Task {
-            if let reloaded = await persistenceEngine.evaluateExternalChange() {
+            if let reloaded = try? await persistenceClient.evaluateExternalChange() {
                 self.state = reloaded
                 self.rolloverRecurringTasksIfNeeded()
             }
@@ -418,23 +349,10 @@ public final class DashboardStore {
     private func persistAsync() {
         persistTask?.cancel()
         let snapshot = state
-        persistTask = Task { [persistenceEngine] in
+        persistTask = Task { [persistenceClient] in
             try? await Task.sleep(for: .milliseconds(120))
             guard !Task.isCancelled else { return }
-            await persistenceEngine.write(snapshot)
-        }
-    }
-
-    private static func loadInitialBlocking(from url: URL) -> DashboardState? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        do {
-            let data = try Data(contentsOf: url)
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode(DashboardState.self, from: data)
-        } catch {
-            print("[DashboardStore] Synchronous load failed: \(error)")
-            return nil
+            try? await persistenceClient.save(snapshot)
         }
     }
 }
