@@ -1,4 +1,3 @@
-// Sources/Views/LeftColumn/BaselineResetView.swift
 import SwiftUI
 
 public struct BaselineResetView: View {
@@ -7,17 +6,17 @@ public struct BaselineResetView: View {
 
     private var taskList: some View {
         VStack(spacing: 8 * s) {
-            ForEach(store.state.baselineTasks) { item in
-                let isEditingThis = store.editingTarget?.id == item.id
+            ForEach(store.baselineTasks) { task in
+                let isEditingThis = store.taskDraft?.id == task.id
                 CheckboxRow(
-                    title: item.title,
-                    tag: item.tag,
-                    isCompleted: item.isCompleted,
+                    title: task.title,
+                    tag: task.tag,
+                    isCompleted: task.isCompleted,
                     isHighlighted: isEditingThis,
-                    onToggle: { store.toggleBaselineTask(id: item.id) },
+                    onToggle: { store.toggleTask(id: task.id) },
                     onEdit: {
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                            store.startEditing(baselineTask: item)
+                            store.startEditing(task: task)
                         }
                     }
                 )
@@ -48,7 +47,8 @@ public struct BaselineResetView: View {
                 .font(.system(size: 24 * s, weight: .bold))
                 .padding(.bottom, 4 * s)
 
-            Text(store.state.baselineSubtitle)
+            // Dynamically computed duration estimate replaces the stale static string
+            Text("Est: \(store.baselineTotalMinutes) min · Daily maintenance")
                 .font(.system(size: 13 * s, weight: .regular))
                 .foregroundColor(.white.opacity(0.8))
                 .padding(.bottom, 14 * s)
@@ -72,7 +72,7 @@ public struct BaselineResetView: View {
         }
         .padding(28 * s)
         .foregroundColor(.white)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(AppConfig.Colors.blockSlate)
     }
 }

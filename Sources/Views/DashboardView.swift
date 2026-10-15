@@ -38,10 +38,6 @@ private struct LeftColumnAdaptiveLayout: Layout {
 public struct DashboardView: View {
     @Bindable public var store: DashboardStore
 
-    private var totalBacklogCount: Int {
-        store.state.focusJobs.count + store.state.upcomingEvents.count + store.state.baselineTasks.count
-    }
-
     public var body: some View {
         GeometryReader { geometry in
             let scalar = max(1.0, geometry.size.width / AppConfig.baseWidth)
@@ -65,7 +61,7 @@ public struct DashboardView: View {
                             VStack(spacing: 0) {
                                 PanelHeaderView(title: "TASK ENTRY DISPATCH", badgeText: "NEW OPERATION", badgeIcon: "plus.circle")
                                 ScrollView(.vertical) {
-                                    TaskEditorView(store: store, mode: .create)
+                                    TaskEditorView(store: store)
                                         .padding(.horizontal, 24 * scalar)
                                         .padding(.top, 16 * scalar)
                                         .padding(.bottom, 24 * scalar)
@@ -75,11 +71,12 @@ public struct DashboardView: View {
                             .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
 
                         case .edit:
-                            if let target = store.editingTarget {
+                            if let draft = store.taskDraft {
                                 VStack(spacing: 0) {
                                     PanelHeaderView(title: "TASK MODIFICATION", badgeText: "EDIT OPERATION", badgeIcon: "pencil")
                                     ScrollView(.vertical) {
-                                        TaskEditorView(store: store, mode: .edit(target))
+                                        TaskEditorView(store: store)
+                                            .id(draft.id) // Enforces explicit state teardown and recreation per task
                                             .padding(.horizontal, 24 * scalar)
                                             .padding(.top, 16 * scalar)
                                             .padding(.bottom, 24 * scalar)
@@ -93,17 +90,10 @@ public struct DashboardView: View {
                             VStack(spacing: 0) {
                                 PanelHeaderView(title: "OPERATIONAL STATUS", badgeText: "OVERVIEW", badgeIcon: "gauge.with.needle")
                                 ScrollView(.vertical) {
-                                    StatusView(
-                                        store: store,
-                                        onEditUpcomingEvent: { event in
-                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                                store.startEditing(upcomingEvent: event)
-                                            }
-                                        }
-                                    )
-                                    .padding(.horizontal, 24 * scalar)
-                                    .padding(.top, 16 * scalar)
-                                    .padding(.bottom, 24 * scalar)
+                                    StatusView(store: store)
+                                        .padding(.horizontal, 24 * scalar)
+                                        .padding(.top, 16 * scalar)
+                                        .padding(.bottom, 24 * scalar)
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
@@ -111,32 +101,16 @@ public struct DashboardView: View {
 
                         case .backlog:
                             VStack(spacing: 0) {
-                                PanelHeaderView(title: "OPERATIONAL BACKLOG", badgeText: "ALL ITEMS (\(totalBacklogCount))", badgeIcon: "tray.full")
+                                PanelHeaderView(
+                                    title: "OPERATIONAL BACKLOG",
+                                    badgeText: "ALL ITEMS (\(store.state.tasks.count))",
+                                    badgeIcon: "tray.full"
+                                )
                                 ScrollView(.vertical) {
-                                    BacklogListView(
-                                        focusJobs: store.state.focusJobs,
-                                        upcomingEvents: store.state.upcomingEvents,
-                                        baselineTasks: store.state.baselineTasks,
-                                        highlightedId: store.editingTarget?.id,
-                                        onEditFocusJob: { job in
-                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                                store.startEditing(focusJob: job)
-                                            }
-                                        },
-                                        onEditBaselineTask: { task in
-                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                                store.startEditing(baselineTask: task)
-                                            }
-                                        },
-                                        onEditUpcomingEvent: { event in
-                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                                store.startEditing(upcomingEvent: event)
-                                            }
-                                        }
-                                    )
-                                    .padding(.horizontal, 24 * scalar)
-                                    .padding(.top, 12 * scalar)
-                                    .padding(.bottom, 24 * scalar)
+                                    BacklogListView(store: store)
+                                        .padding(.horizontal, 24 * scalar)
+                                        .padding(.top, 12 * scalar)
+                                        .padding(.bottom, 24 * scalar)
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
@@ -144,7 +118,11 @@ public struct DashboardView: View {
 
                         case .history:
                             VStack(spacing: 0) {
-                                PanelHeaderView(title: "OPERATIONAL HISTORY", badgeText: "LOGGED (\(store.state.historyRecords.count))", badgeIcon: "clock.arrow.circlepath")
+                                PanelHeaderView(
+                                    title: "OPERATIONAL HISTORY",
+                                    badgeText: "LOGGED (\(store.state.historyRecords.count))",
+                                    badgeIcon: "clock.arrow.circlepath"
+                                )
                                 ScrollView(.vertical) {
                                     HistoryTimelineView(records: store.state.historyRecords)
                                         .padding(.horizontal, 24 * scalar)

@@ -12,6 +12,7 @@ public struct CheckboxRow: View {
     public var body: some View {
         Button(action: onToggle) {
             HStack(spacing: 14 * s) {
+                // Interactive Checkbox
                 ZStack {
                     Rectangle()
                         .strokeBorder(Color.white, lineWidth: 1.5 * s)
@@ -25,16 +26,21 @@ public struct CheckboxRow: View {
                     }
                 }
 
+                // Title with trailing truncation protection
                 Text(title)
                     .font(.system(size: 15 * s, weight: .bold))
                     .foregroundColor(.white)
                     .strikethrough(isCompleted, color: .white.opacity(0.6))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                Spacer()
+                Spacer(minLength: 8 * s)
 
+                // Tag retains fixed priority to prevent off-screen truncation
                 Text(tag)
-                    .font(.system(size: 13 * s, weight: .bold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .font(.system(size: 12 * s, weight: .bold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .layoutPriority(1)
             }
             .padding(.horizontal, 6 * s)
             .padding(.vertical, 4 * s)

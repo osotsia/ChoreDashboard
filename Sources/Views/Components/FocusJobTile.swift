@@ -1,26 +1,30 @@
 import SwiftUI
 
 public struct FocusJobTile: View {
-    public let job: FocusJob
+    public let task: TaskItem
     public var isHighlighted: Bool = false
     public var onToggle: () -> Void
     public var onEdit: (() -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
+    private var isOverdue: Bool {
+        task.healthState() == .overdue && !task.isCompleted
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header Row: System Tag + Overdue Indicator + Checkbox
+            // Header Row: Tag + Overdue Indicator + Checkbox
             HStack(alignment: .center, spacing: 6 * s) {
-                Text(job.tag.uppercased())
+                Text(task.tag.uppercased())
                     .font(.system(size: 10 * s, weight: .bold))
                     .tracking(1.3 * s)
-                    .foregroundColor(job.isCompleted ? Color.white.opacity(0.35) : Color.white.opacity(0.7))
+                    .foregroundColor(task.isCompleted ? Color.white.opacity(0.35) : Color.white.opacity(0.7))
                     .lineLimit(1)
 
-                if job.isOverdue && !job.isCompleted {
+                if isOverdue {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 11 * s, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppConfig.Colors.statusOrange)
                 }
 
                 Spacer()
@@ -29,13 +33,13 @@ public struct FocusJobTile: View {
                     ZStack {
                         Rectangle()
                             .strokeBorder(
-                                job.isCompleted ? Color.white : Color.white.opacity(0.35),
+                                task.isCompleted ? Color.white : Color.white.opacity(0.35),
                                 lineWidth: 1.5 * s
                             )
                             .frame(width: 17 * s, height: 17 * s)
-                            .background(job.isCompleted ? Color.white : Color.clear)
+                            .background(task.isCompleted ? Color.white : Color.clear)
 
-                        if job.isCompleted {
+                        if task.isCompleted {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 11 * s, weight: .black))
                                 .foregroundColor(.black)
@@ -47,11 +51,11 @@ public struct FocusJobTile: View {
             }
             .padding(.bottom, 8 * s)
 
-            // Primary Job Title
-            Text(job.title)
+            // Primary Task Title
+            Text(task.title)
                 .font(.system(size: 14 * s, weight: .bold))
-                .foregroundColor(job.isCompleted ? Color.white.opacity(0.4) : .white)
-                .strikethrough(job.isCompleted, color: Color.white.opacity(0.4))
+                .foregroundColor(task.isCompleted ? Color.white.opacity(0.4) : .white)
+                .strikethrough(task.isCompleted, color: Color.white.opacity(0.4))
                 .lineSpacing(1.5 * s)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -63,19 +67,19 @@ public struct FocusJobTile: View {
         .background(
             isHighlighted
                 ? Color.white.opacity(0.12)
-                : (job.isCompleted ? AppConfig.Colors.tileBackground.opacity(0.5) : AppConfig.Colors.tileBackground)
+                : (task.isCompleted ? AppConfig.Colors.tileBackground.opacity(0.5) : AppConfig.Colors.tileBackground)
         )
         .overlay(
             Rectangle()
                 .strokeBorder(
-                    isHighlighted ? Color.white : (job.isCompleted ? Color.white.opacity(0.1) : Color.white.opacity(0.2)),
+                    isHighlighted ? Color.white : (task.isCompleted ? Color.white.opacity(0.1) : Color.white.opacity(0.2)),
                     lineWidth: isHighlighted ? 1.5 * s : 1 * s
                 )
         )
         .contextMenu {
             if let onEdit = onEdit {
                 Button(action: onEdit) {
-                    Label("Edit", systemImage: "pencil")
+                    Label("Edit Task", systemImage: "pencil")
                 }
             }
         }

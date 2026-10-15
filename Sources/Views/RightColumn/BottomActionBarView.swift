@@ -12,10 +12,8 @@ public struct BottomActionBarView: View {
                 label: "NEW",
                 isSelected: store.activeRightTab == .create
             ) {
-                if store.activeRightTab != .create {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.selectRightTab(.create)
-                    }
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    store.startCreatingTask()
                 }
             }
 
@@ -25,10 +23,8 @@ public struct BottomActionBarView: View {
                 label: "STATUS",
                 isSelected: store.activeRightTab == .status
             ) {
-                if store.activeRightTab != .status {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.selectRightTab(.status)
-                    }
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    store.selectRightTab(.status)
                 }
             }
 
@@ -38,10 +34,8 @@ public struct BottomActionBarView: View {
                 label: "BACKLOG",
                 isSelected: store.activeRightTab == .backlog
             ) {
-                if store.activeRightTab != .backlog {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.selectRightTab(.backlog)
-                    }
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    store.selectRightTab(.backlog)
                 }
             }
 
@@ -51,10 +45,8 @@ public struct BottomActionBarView: View {
                 label: "HISTORY",
                 isSelected: store.activeRightTab == .history
             ) {
-                if store.activeRightTab != .history {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                        store.selectRightTab(.history)
-                    }
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+                    store.selectRightTab(.history)
                 }
             }
         }

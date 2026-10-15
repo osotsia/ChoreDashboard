@@ -10,6 +10,10 @@ public enum PreviewData {
         return cal.date(from: comps) ?? Date()
     }
 
+    private static func daysFromNow(_ days: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
+    }
+
     public static let defaultState: DashboardState = {
         let kitchenId   = UUID()
         let floorsId    = UUID()
@@ -22,48 +26,46 @@ public enum PreviewData {
         let dishesId    = UUID()
 
         return DashboardState(
-            focusOverline: "SCHEDULED OPERATIONS",
-            focusTitle: "Main Tasks",
-            focusSubtitle: "Targeted deep maintenance · Non-routine upkeep",
-            heroTools: "TOOLS: Microfiber cloths, food-safe sanitizer, brush kit.",
-            focusJobs: [
-                FocusJob(id: kitchenId, tag: "KITCHEN", title: "Deep clean countertops", isOverdue: false),
-                FocusJob(id: floorsId, tag: "FLOORS", title: "Scrub floors & crevices", isOverdue: true),
-                FocusJob(id: fridgeId, tag: "APPLIANCE", title: "Deep clean refrigerator"),
-                FocusJob(id: bottlesId, tag: "PANTRY", title: "Wash kombucha bottles"),
-                FocusJob(id: brewingId, tag: "BREWING", title: "Prep kombucha batch"),
-                FocusJob(id: sinkId, tag: "PLUMBING", title: "Sanitize sink & drain")
+            schemaVersion: 2,
+            tasks: [
+                // 1. Daily Baseline Items (Cadence: 1 Day)
+                TaskItem(id: stretchId, title: "Stretch", tag: "BODY", durationMinutes: 10, isCompleted: false, dueDate: Date(), recurrence: RecurrenceRule(count: 1, unit: .day)),
+                TaskItem(id: meditateId, title: "13-minute meditation", tag: "MIND", durationMinutes: 13, isCompleted: false, dueDate: Date(), recurrence: RecurrenceRule(count: 1, unit: .day)),
+                TaskItem(id: dishesId, title: "Wash dishes", tag: "KITCHEN", durationMinutes: 8, isCompleted: false, dueDate: Date(), recurrence: RecurrenceRule(count: 1, unit: .day)),
+
+                // 2. Active Focus Items (Due Today / Overdue)
+                TaskItem(id: kitchenId, title: "Deep clean countertops", tag: "KITCHEN", durationMinutes: 15, isCompleted: false, dueDate: Date(), recurrence: RecurrenceRule(count: 1, unit: .week)),
+                TaskItem(id: floorsId, title: "Scrub floors & crevices", tag: "FLOORS", durationMinutes: 20, isCompleted: false, dueDate: daysFromNow(-1), recurrence: RecurrenceRule(count: 1, unit: .week)),
+                TaskItem(id: fridgeId, title: "Deep clean refrigerator", tag: "APPLIANCE", durationMinutes: 30, isCompleted: false, dueDate: Date(), recurrence: RecurrenceRule(count: 1, unit: .month)),
+                TaskItem(id: bottlesId, title: "Wash kombucha bottles", tag: "PANTRY", durationMinutes: 15, isCompleted: false, dueDate: Date(), recurrence: RecurrenceRule(count: 2, unit: .week)),
+                TaskItem(id: brewingId, title: "Prep kombucha batch", tag: "BREWING", durationMinutes: 25, isCompleted: false, dueDate: Date(), recurrence: RecurrenceRule(count: 2, unit: .week)),
+                TaskItem(id: sinkId, title: "Sanitize sink & drain", tag: "PLUMBING", durationMinutes: 10, isCompleted: false, dueDate: Date(), recurrence: RecurrenceRule(count: 1, unit: .week)),
+
+                // 3. Upcoming Scheduled Horizon Tasks
+                TaskItem(title: "Water flowers", tag: "PLANTS", durationMinutes: 10, dueDate: daysFromNow(2), recurrence: RecurrenceRule(count: 4, unit: .day)),
+                TaskItem(title: "Kitchen trash", tag: "WASTE", durationMinutes: 5, dueDate: daysFromNow(3), recurrence: RecurrenceRule(count: 1, unit: .week)),
+                TaskItem(title: "Replace water filter", tag: "WATER", durationMinutes: 5, dueDate: daysFromNow(7), recurrence: RecurrenceRule(count: 1, unit: .week)),
+                TaskItem(title: "Basic vacuuming", tag: "FLOORS", durationMinutes: 15, dueDate: daysFromNow(12), recurrence: RecurrenceRule(count: 2, unit: .week)),
+                TaskItem(title: "Wipe interior windows", tag: "WINDOWS", durationMinutes: 25, dueDate: daysFromNow(21), recurrence: RecurrenceRule(count: 3, unit: .week)),
+                TaskItem(title: "Tidy up boxes", tag: "STORAGE", durationMinutes: 20, dueDate: daysFromNow(28), recurrence: RecurrenceRule(count: 1, unit: .month)),
+                TaskItem(title: "Clean bathtub", tag: "BATH", durationMinutes: 20, dueDate: daysFromNow(28), recurrence: RecurrenceRule(count: 1, unit: .month)),
+                TaskItem(title: "Sanitize washer drum", tag: "APPLIANCE", durationMinutes: 15, dueDate: daysFromNow(60), recurrence: RecurrenceRule(count: 2, unit: .month))
             ],
-            baselineTitle: "Daily Baseline",
-            baselineSubtitle: "Est: 31 min · Daily maintenance",
-            baselineRule: "RULE: Complete before noon.",
-            baselineTasks: [
-                ChoreItem(id: stretchId, title: "Stretch", durationMinutes: 10, tag: "BODY"),
-                ChoreItem(id: meditateId, title: "13-minute meditation", durationMinutes: 13, tag: "MIND"),
-                ChoreItem(id: dishesId, title: "Wash dishes", durationMinutes: 8, tag: "KITCHEN")
-            ],
-            upcomingEvents: [
-                HorizonEvent(tag: "PLANTS", title: "Water flowers", timeAnchor: "In 2 Days", repeatCount: 4, repeatUnit: .day, healthState: .notYet),
-                HorizonEvent(tag: "WASTE", title: "Kitchen trash", timeAnchor: "In 3 Days", repeatCount: 1, repeatUnit: .week, healthState: .notYet),
-                HorizonEvent(tag: "WATER", title: "Replace water filter", timeAnchor: "In 7 Days", repeatCount: 1, repeatUnit: .week, healthState: .good),
-                HorizonEvent(tag: "FLOORS", title: "Basic vacuuming", timeAnchor: "In 12 Days", repeatCount: 2, repeatUnit: .week, healthState: .good),
-                HorizonEvent(tag: "WINDOWS", title: "Wipe interior windows", timeAnchor: "In 21 Days", repeatCount: 3, repeatUnit: .week, healthState: .good),
-                HorizonEvent(tag: "STORAGE", title: "Tidy up boxes", timeAnchor: "In 28 Days", repeatCount: 1, repeatUnit: .month, healthState: .good),
-                HorizonEvent(tag: "BATH", title: "Clean bathtub", timeAnchor: "In 28 Days", repeatCount: 1, repeatUnit: .month, healthState: .good),
-                HorizonEvent(tag: "APPLIANCE", title: "Sanitize washer drum", timeAnchor: "In 60 Days", repeatCount: 2, repeatUnit: .month, healthState: .good)
-            ],
-            telemetryMetrics: [],
             historyRecords: [
-                HistoryRecord(jobId: kitchenId, title: "Deep clean countertops", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 0, hour: 9, minute: 15)),
-                HistoryRecord(jobId: sinkId, title: "Sanitize sink & drain", tag: "PLUMBING", completedAt: relativeDate(daysAgo: 1, hour: 19, minute: 40)),
-                HistoryRecord(jobId: dishesId, title: "Wash dishes", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 1, hour: 12, minute: 30)),
-                HistoryRecord(jobId: floorsId, title: "Scrub floors & crevices", tag: "FLOORS", completedAt: relativeDate(daysAgo: 2, hour: 11, minute: 10)),
-                HistoryRecord(jobId: kitchenId, title: "Deep clean countertops", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 3, hour: 16, minute: 20)),
-                HistoryRecord(jobId: bottlesId, title: "Wash kombucha bottles", tag: "PANTRY", completedAt: relativeDate(daysAgo: 4, hour: 14, minute: 0)),
-                HistoryRecord(jobId: sinkId, title: "Sanitize sink & drain", tag: "PLUMBING", completedAt: relativeDate(daysAgo: 5, hour: 20, minute: 15)),
-                HistoryRecord(jobId: kitchenId, title: "Deep clean countertops", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 6, hour: 8, minute: 45))
+                HistoryRecord(taskId: kitchenId, title: "Deep clean countertops", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 0, hour: 9, minute: 15)),
+                HistoryRecord(taskId: sinkId, title: "Sanitize sink & drain", tag: "PLUMBING", completedAt: relativeDate(daysAgo: 1, hour: 19, minute: 40)),
+                HistoryRecord(taskId: dishesId, title: "Wash dishes", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 1, hour: 12, minute: 30)),
+                HistoryRecord(taskId: floorsId, title: "Scrub floors & crevices", tag: "FLOORS", completedAt: relativeDate(daysAgo: 2, hour: 11, minute: 10)),
+                HistoryRecord(taskId: kitchenId, title: "Deep clean countertops", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 3, hour: 16, minute: 20)),
+                HistoryRecord(taskId: bottlesId, title: "Wash kombucha bottles", tag: "PANTRY", completedAt: relativeDate(daysAgo: 4, hour: 14, minute: 0)),
+                HistoryRecord(taskId: sinkId, title: "Sanitize sink & drain", tag: "PLUMBING", completedAt: relativeDate(daysAgo: 5, hour: 20, minute: 15)),
+                HistoryRecord(taskId: kitchenId, title: "Deep clean countertops", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 6, hour: 8, minute: 45))
             ],
-            customTags: ["KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING", "PANTRY", "BREWING", "BODY", "MIND", "PLANTS", "WASTE", "STORAGE", "BATH", "WATER", "WINDOWS"]
+            customTags: [
+                "KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING", "PANTRY",
+                "BREWING", "BODY", "MIND", "PLANTS", "WASTE", "STORAGE",
+                "BATH", "WATER", "WINDOWS"
+            ]
         )
     }()
 }

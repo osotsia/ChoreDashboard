@@ -1,4 +1,3 @@
-// --- File: Sources/Views/LeftColumn/PrimaryFocusView.swift ---
 import SwiftUI
 
 public struct PrimaryFocusView: View {
@@ -13,6 +12,7 @@ public struct PrimaryFocusView: View {
         ]
 
         VStack(alignment: .leading, spacing: 0) {
+            // Header: Offset with windowChromeTopInset to avoid traffic light overlap
             HStack {
                 Text(store.state.focusOverline.uppercased())
                     .font(.system(size: 11 * s, weight: .bold))
@@ -27,6 +27,7 @@ public struct PrimaryFocusView: View {
                         .font(.system(size: 12 * s))
                 }
             }
+            .padding(.top, AppConfig.windowChromeTopInset * s)
             .padding(.bottom, 6 * s)
 
             Text(store.state.focusTitle)
@@ -39,20 +40,20 @@ public struct PrimaryFocusView: View {
                 .foregroundColor(Color.white.opacity(0.8))
                 .padding(.bottom, 14 * s)
 
-            // Dynamic scroll container eliminates visual clipping past 6 tasks
+            // Dynamic grid populated from projected focusQueue
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVGrid(columns: threeColumns, spacing: 10 * s) {
-                    ForEach(store.state.focusJobs) { job in
-                        let isEditingThis = store.editingTarget?.id == job.id
+                    ForEach(store.focusQueue) { task in
+                        let isEditingThis = store.taskDraft?.id == task.id
                         FocusJobTile(
-                            job: job,
+                            task: task,
                             isHighlighted: isEditingThis,
                             onToggle: {
-                                store.toggleFocusJob(id: job.id)
+                                store.toggleTask(id: task.id)
                             },
                             onEdit: {
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                                    store.startEditing(focusJob: job)
+                                    store.startEditing(task: task)
                                 }
                             }
                         )
@@ -72,7 +73,8 @@ public struct PrimaryFocusView: View {
                 .font(.system(size: 11 * s, weight: .bold))
                 .foregroundColor(Color.white.opacity(0.6))
         }
-        .padding(24 * s)
+        .padding(.horizontal, 24 * s)
+        .padding(.bottom, 24 * s)
         .foregroundColor(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppConfig.Colors.blockBlack)

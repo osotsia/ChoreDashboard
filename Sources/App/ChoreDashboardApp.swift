@@ -1,4 +1,3 @@
-// --- File: Sources/App/ChoreDashboardApp.swift ---
 import SwiftUI
 import AppKit
 
@@ -33,7 +32,6 @@ struct ChoreDashboardApp: App {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        // Single distinct main window prevents duplicate window instances
         Window("Chore Dashboard", id: "dashboard") {
             DashboardView(store: store)
                 .background(WindowAspectLock(ratio: AppConfig.aspectRatio))
@@ -43,7 +41,7 @@ struct ChoreDashboardApp: App {
                 )
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .windowResizability(.automatic)
 
         MenuBarExtra("Chore Dashboard", systemImage: "checklist") {
             Button("Show Dashboard") {
@@ -51,8 +49,8 @@ struct ChoreDashboardApp: App {
                 openWindow(id: "dashboard")
             }
             Divider()
-            Text("Daily Baseline: \(store.state.baselineTasks.filter { !$0.isCompleted }.count) Left")
-            Text("Scheduled Focus: \(store.state.focusJobs.filter { !$0.isCompleted }.count) Active Jobs")
+            Text("Daily Baseline: \(store.baselineTasks.filter { !$0.isCompleted }.count) Left")
+            Text("Scheduled Focus: \(store.focusQueue.filter { !$0.isCompleted }.count) Active Jobs")
             Divider()
             Button("Reset Daily Baseline") {
                 store.resetDailyBaseline()

@@ -2,7 +2,8 @@ import SwiftUI
 import Observation
 import CryptoKit
 
-public enum RightPanelTab: String, Codable {
+// MARK: - Navigation Tabs
+public enum RightPanelTab: String, Codable, Sendable {
     case status
     case backlog
     case history
@@ -10,85 +11,8 @@ public enum RightPanelTab: String, Codable {
     case edit
 }
 
-public enum EditableTaskTarget: Identifiable, Equatable {
-    case focus(FocusJob)
-    case baseline(ChoreItem)
-    case horizon(HorizonEvent)
-
-    public var id: UUID {
-        switch self {
-        case .focus(let j): return j.id
-        case .baseline(let c): return c.id
-        case .horizon(let h): return h.id
-        }
-    }
-
-    public var title: String {
-        switch self {
-        case .focus(let j): return j.title
-        case .baseline(let c): return c.title
-        case .horizon(let h): return h.title
-        }
-    }
-
-    public var tag: String {
-        switch self {
-        case .focus(let j): return j.tag
-        case .baseline(let c): return c.tag
-        case .horizon(let h): return h.tag
-        }
-    }
-}
-
-public enum CadenceUnit: String, CaseIterable, Codable {
-    case day = "Day"
-    case week = "Week"
-    case month = "Month"
-    case year = "Year"
-
-    public func days(count: Int) -> Int {
-        switch self {
-        case .day:   return count
-        case .week:  return count * 7
-        case .month: return count * 30
-        case .year:  return count * 365
-        }
-    }
-
-    public func displayString(count: Int) -> String {
-        count == 1 ? rawValue : "\(rawValue)s"
-    }
-
-    public func next() -> CadenceUnit {
-        let all = Self.allCases
-        let idx = all.firstIndex(of: self) ?? 0
-        return all[(idx + 1) % all.count]
-    }
-
-    public func previous() -> CadenceUnit {
-        let all = Self.allCases
-        let idx = all.firstIndex(of: self) ?? 0
-        return all[(idx - 1 + all.count) % all.count]
-    }
-}
-
-public enum TaskHealthState: String, CaseIterable, Codable {
-    case good = "GOOD"
-    case notYet = "NOT YET"
-    case due = "DUE"
-    case overdue = "OVERDUE"
-
-    public var subtitle: String {
-        switch self {
-        case .good:    return "FRESH"
-        case .notYet:  return "RUNNING"
-        case .due:     return "TODAY"
-        case .overdue: return "URGENT"
-        }
-    }
-}
-
-public struct TodayOperationalSnapshot {
+// MARK: - Operational Snapshot
+public struct TodayOperationalSnapshot: Sendable {
     public let focusTotal: Int
     public let focusCompleted: Int
     public let focusOverdue: Int
@@ -104,6 +28,60 @@ public struct TodayOperationalSnapshot {
     public let clearanceRate: Double
 }
 
+// MARK: - Task Draft Model (Centralized Form State)
+public struct TaskDraft: Identifiable, Equatable, Sendable {
+    public let id: UUID
+    public var isNew: Bool
+    public var title: String
+    public var tag: String
+    public var durationMinutes: Int
+    public var isOneTime: Bool
+    public var repeatCount: Int
+    public var repeatUnit: CadenceUnit
+    public var targetDueDate: Date
+    public var initialHealthState: TaskHealthState
+
+    public init(
+        id: UUID = UUID(),
+        isNew: Bool = true,
+        title: String = "",
+        tag: String = "",
+        durationMinutes: Int = 15,
+        isOneTime: Bool = false,
+        repeatCount: Int = 1,
+        repeatUnit: CadenceUnit = .week,
+        targetDueDate: Date = Date(),
+        initialHealthState: TaskHealthState = .due
+    ) {
+        self.id = id
+        self.isNew = isNew
+        self.title = title
+        self.tag = tag
+        self.durationMinutes = durationMinutes
+        self.isOneTime = isOneTime
+        self.repeatCount = repeatCount
+        self.repeatUnit = repeatUnit
+        self.targetDueDate = targetDueDate
+        self.initialHealthState = initialHealthState
+    }
+
+    public static func from(task: TaskItem) -> TaskDraft {
+        TaskDraft(
+            id: task.id,
+            isNew: false,
+            title: task.title,
+            tag: task.tag,
+            durationMinutes: task.durationMinutes,
+            isOneTime: task.isOneTime,
+            repeatCount: task.recurrence?.count ?? 1,
+            repeatUnit: task.recurrence?.unit ?? .week,
+            targetDueDate: task.dueDate,
+            initialHealthState: task.healthState()
+        )
+    }
+}
+
+// MARK: - File System Observer
 private final class DirectoryWatcher: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private var descriptor: Int32 = -1
@@ -130,6 +108,7 @@ private final class DirectoryWatcher: @unchecked Sendable {
     }
 }
 
+// MARK: - Actor-Bound Persistence Engine
 private actor StatePersistenceEngine {
     private let storageURL: URL
     private var lastPersistedChecksum: SHA256Digest?
@@ -170,29 +149,137 @@ private actor StatePersistenceEngine {
     }
 }
 
+// MARK: - Observable Dashboard Store
 @Observable
 @MainActor
 public final class DashboardStore {
     public var state: DashboardState
     public var activeRightTab: RightPanelTab = .status
     public private(set) var previousRightTab: RightPanelTab = .status
-    public var editingTarget: EditableTaskTarget? = nil
+    public var taskDraft: TaskDraft? = nil
 
-    public var isShowingBacklog: Bool {
-        get { activeRightTab == .backlog }
-        set { selectRightTab(newValue ? .backlog : .status) }
+    private var watcher: DirectoryWatcher?
+    private let persistenceEngine: StatePersistenceEngine
+    private var persistTask: Task<Void, Never>?
+
+    public init() {
+        let directoryURL = AppConfig.storageDirectory
+        let fileURL = AppConfig.storageURL
+        try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+
+        let engine = StatePersistenceEngine(storageURL: fileURL)
+        self.persistenceEngine = engine
+
+        if let initial = Self.loadInitialBlocking(from: fileURL) {
+            self.state = initial
+        } else {
+            let fallback = PreviewData.defaultState
+            self.state = fallback
+            if !FileManager.default.fileExists(atPath: fileURL.path) {
+                Task { await engine.write(fallback) }
+            }
+        }
+
+        rolloverRecurringTasksIfNeeded()
+
+        self.watcher = DirectoryWatcher(directoryURL: directoryURL) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                if let updated = await self.persistenceEngine.evaluateExternalChange() {
+                    self.state = updated
+                    self.rolloverRecurringTasksIfNeeded()
+                }
+            }
+        }
+    }
+
+    // MARK: - Recurrence Rollover Engine
+    /// Automatically resets completed recurring tasks once their completion date has passed.
+    public func rolloverRecurringTasksIfNeeded(referenceDate: Date = Date()) {
+        let calendar = Calendar.current
+        var didMutate = false
+
+        for i in state.tasks.indices {
+            guard let recurrence = state.tasks[i].recurrence else { continue }
+            guard state.tasks[i].isCompleted, let completedAt = state.tasks[i].lastCompletedAt else { continue }
+
+            if !calendar.isDateInToday(completedAt) {
+                state.tasks[i].isCompleted = false
+                if !state.tasks[i].isDailyBaseline {
+                    let intervalDays = recurrence.intervalDays
+                    state.tasks[i].dueDate = calendar.date(byAdding: .day, value: intervalDays, to: completedAt) ?? state.tasks[i].dueDate
+                }
+                didMutate = true
+            }
+        }
+
+        if didMutate {
+            persistAsync()
+        }
+    }
+
+    // MARK: - Stateless Projections (Derived Collections)
+    
+    public var baselineTasks: [TaskItem] {
+        state.tasks.filter { $0.isDailyBaseline }
+    }
+
+    public var baselineTotalMinutes: Int {
+        baselineTasks.reduce(0) { $0 + $1.durationMinutes }
+    }
+
+    public var focusQueue: [TaskItem] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        return state.tasks.filter { task in
+            guard !task.isDailyBaseline else { return false }
+
+            let taskDue = calendar.startOfDay(for: task.dueDate)
+            let isOverdueOrDueToday = taskDue <= today
+
+            if task.isCompleted {
+                if let completedAt = task.lastCompletedAt {
+                    return calendar.isDateInToday(completedAt)
+                }
+                return isOverdueOrDueToday
+            }
+            return isOverdueOrDueToday
+        }
+    }
+
+    public var upcomingEvents: [TaskItem] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        return state.tasks.filter { task in
+            guard !task.isDailyBaseline else { return false }
+            let taskDue = calendar.startOfDay(for: task.dueDate)
+            return taskDue > today && !task.isCompleted
+        }
+    }
+
+    public var sortedUpcomingEvents: [TaskItem] {
+        upcomingEvents.sorted {
+            let days0 = $0.estimatedDaysRemaining()
+            let days1 = $1.estimatedDaysRemaining()
+            if days0 != days1 { return days0 < days1 }
+            return $0.title < $1.title
+        }
     }
 
     public var todaySnapshot: TodayOperationalSnapshot {
-        let fTotal = state.focusJobs.count
-        let fDone = state.focusJobs.filter { $0.isCompleted }.count
-        let fOverdue = state.focusJobs.filter { $0.isOverdue && !$0.isCompleted }.count
+        let fQueue = focusQueue
+        let fTotal = fQueue.count
+        let fDone = fQueue.filter { $0.isCompleted }.count
+        let fOverdue = fQueue.filter { $0.healthState() == .overdue && !$0.isCompleted }.count
         let fRemaining = fTotal - fDone
 
-        let bTotal = state.baselineTasks.count
-        let bDone = state.baselineTasks.filter { $0.isCompleted }.count
+        let bTasks = baselineTasks
+        let bTotal = bTasks.count
+        let bDone = bTasks.filter { $0.isCompleted }.count
         let bRemaining = bTotal - bDone
-        let bMinsLeft = state.baselineTasks.filter { !$0.isCompleted }.reduce(0) { $0 + $1.durationMinutes }
+        let bMinsLeft = bTasks.filter { !$0.isCompleted }.reduce(0) { $0 + $1.durationMinutes }
 
         let total = fTotal + bTotal
         let completed = fDone + bDone
@@ -213,67 +300,22 @@ public final class DashboardStore {
         )
     }
 
-    public var sortedUpcomingEvents: [HorizonEvent] {
-        state.upcomingEvents.sorted {
-            if $0.estimatedDaysRemaining != $1.estimatedDaysRemaining {
-                return $0.estimatedDaysRemaining < $1.estimatedDaysRemaining
-            }
-            return $0.title < $1.title
-        }
-    }
-
     public var availableTags: [String] {
         var tags = Set<String>()
-        let sanitize: (String) -> String = { raw in
-            raw.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
-                .trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        }
-
-        for tag in state.customTags { tags.insert(sanitize(tag)) }
-        for job in state.focusJobs { tags.insert(sanitize(job.tag)) }
-        for task in state.baselineTasks { tags.insert(sanitize(task.tag)) }
-        for event in state.upcomingEvents { tags.insert(sanitize(event.tag)) }
-        for record in state.historyRecords { tags.insert(sanitize(record.tag)) }
+        for tag in state.customTags { tags.insert(tag) }
+        for task in state.tasks { tags.insert(task.tag) }
+        for record in state.historyRecords { tags.insert(record.tag) }
 
         let clean = tags.filter { !$0.isEmpty }.sorted()
         return clean.isEmpty ? ["KITCHEN", "FLOORS", "APPLIANCE", "PLUMBING"] : clean
     }
 
-    private var watcher: DirectoryWatcher?
-    private let persistenceEngine: StatePersistenceEngine
-
-    public init() {
-        let directoryURL = AppConfig.storageDirectory
-        let fileURL = AppConfig.storageURL
-        try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-
-        let engine = StatePersistenceEngine(storageURL: fileURL)
-        self.persistenceEngine = engine
-
-        if let initial = Self.loadInitialBlocking(from: fileURL) {
-            self.state = initial
-        } else {
-            let fallback = PreviewData.defaultState
-            self.state = fallback
-            if !FileManager.default.fileExists(atPath: fileURL.path) {
-                Task { await engine.write(fallback) }
-            }
-        }
-
-        self.watcher = DirectoryWatcher(directoryURL: directoryURL) { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                if let updated = await self.persistenceEngine.evaluateExternalChange() {
-                    self.state = updated
-                }
-            }
-        }
-    }
-
+    // MARK: - Navigation Control
     public func selectRightTab(_ tab: RightPanelTab) {
         guard tab != activeRightTab else { return }
-        if activeRightTab == .edit && tab != .edit {
-            editingTarget = nil
+        if tab == .create && taskDraft == nil {
+            startCreatingTask()
+            return
         }
         if activeRightTab != .create && activeRightTab != .edit {
             previousRightTab = activeRightTab
@@ -281,190 +323,170 @@ public final class DashboardStore {
         activeRightTab = tab
     }
 
-    public func dismissCreateTask() {
+    public func dismissDraft() {
+        taskDraft = nil
         activeRightTab = previousRightTab
     }
 
-    public func dismissEditTask() {
-        editingTarget = nil
-        activeRightTab = previousRightTab
+    // MARK: - Draft & Task Modification Actions
+    public func startCreatingTask() {
+        let defaultTag = availableTags.first ?? "GENERAL"
+        taskDraft = TaskDraft(
+            id: UUID(),
+            isNew: true,
+            title: "",
+            tag: defaultTag,
+            durationMinutes: 15,
+            isOneTime: false,
+            repeatCount: 1,
+            repeatUnit: .week,
+            targetDueDate: Date(),
+            initialHealthState: .due
+        )
+        selectRightTab(.create)
     }
 
-    public func toggleBacklog() {
-        selectRightTab(activeRightTab == .backlog ? .status : .backlog)
-    }
-
-    public func startEditing(focusJob: FocusJob) {
-        editingTarget = .focus(focusJob)
+    public func startEditing(task: TaskItem) {
+        taskDraft = TaskDraft.from(task: task)
         selectRightTab(.edit)
     }
 
-    public func startEditing(baselineTask: ChoreItem) {
-        editingTarget = .baseline(baselineTask)
-        selectRightTab(.edit)
-    }
+    public func commitDraft() {
+        guard let draft = taskDraft else { return }
+        let cleanTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTag = draft.tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !cleanTitle.isEmpty, !cleanTag.isEmpty else { return }
 
-    public func startEditing(upcomingEvent: HorizonEvent) {
-        editingTarget = .horizon(upcomingEvent)
-        selectRightTab(.edit)
-    }
+        addCustomTag(cleanTag)
 
-    public func applyEditedTask(
-        target: EditableTaskTarget,
-        title: String,
-        tag: String,
-        durationMinutes: Int,
-        isOneTime: Bool,
-        repeatCount: Int,
-        repeatUnit: CadenceUnit,
-        healthState: TaskHealthState
-    ) {
-        let targetId = target.id
-        let originalCompleted: Bool
-        switch target {
-        case .focus(let job):
-            originalCompleted = job.isCompleted
-            state.focusJobs.removeAll(where: { $0.id == targetId })
-        case .baseline(let task):
-            originalCompleted = task.isCompleted
-            state.baselineTasks.removeAll(where: { $0.id == targetId })
-        case .horizon:
-            originalCompleted = false
-            state.upcomingEvents.removeAll(where: { $0.id == targetId })
+        let recurrence: RecurrenceRule? = draft.isOneTime
+            ? nil
+            : RecurrenceRule(count: draft.repeatCount, unit: draft.repeatUnit)
+
+        let calendar = Calendar.current
+        let today = Date()
+        let resolvedDueDate: Date
+
+        if draft.isNew {
+            switch draft.initialHealthState {
+            case .overdue:
+                resolvedDueDate = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+            case .due:
+                resolvedDueDate = today
+            case .notYet:
+                let interval = recurrence?.intervalDays ?? 7
+                resolvedDueDate = calendar.date(byAdding: .day, value: max(1, interval / 2), to: today) ?? today
+            case .good:
+                let interval = recurrence?.intervalDays ?? 7
+                resolvedDueDate = calendar.date(byAdding: .day, value: max(1, interval), to: today) ?? today
+            }
+
+            let newTask = TaskItem(
+                id: draft.id,
+                title: cleanTitle,
+                tag: cleanTag,
+                durationMinutes: draft.durationMinutes,
+                isCompleted: false,
+                dueDate: resolvedDueDate,
+                lastCompletedAt: nil,
+                recurrence: recurrence
+            )
+            state.tasks.append(newTask)
+        } else {
+            if let idx = state.tasks.firstIndex(where: { $0.id == draft.id }) {
+                let existing = state.tasks[idx]
+                if existing.healthState() == draft.initialHealthState && existing.recurrence == recurrence {
+                    resolvedDueDate = existing.dueDate
+                } else {
+                    switch draft.initialHealthState {
+                    case .overdue:
+                        resolvedDueDate = calendar.date(byAdding: .day, value: -1, to: today) ?? today
+                    case .due:
+                        resolvedDueDate = today
+                    case .notYet:
+                        let interval = recurrence?.intervalDays ?? 7
+                        resolvedDueDate = calendar.date(byAdding: .day, value: max(1, interval / 2), to: today) ?? today
+                    case .good:
+                        let interval = recurrence?.intervalDays ?? 7
+                        resolvedDueDate = calendar.date(byAdding: .day, value: max(1, interval), to: today) ?? today
+                    }
+                }
+
+                state.tasks[idx].title = cleanTitle
+                state.tasks[idx].tag = cleanTag
+                state.tasks[idx].durationMinutes = draft.durationMinutes
+                state.tasks[idx].recurrence = recurrence
+                state.tasks[idx].dueDate = resolvedDueDate
+            }
         }
 
-        routeTaskAssignment(
-            id: targetId,
-            title: title,
-            tag: tag,
-            durationMinutes: durationMinutes,
-            isOneTime: isOneTime,
-            repeatCount: repeatCount,
-            repeatUnit: repeatUnit,
-            healthState: healthState,
-            isCompleted: originalCompleted
-        )
-
-        dismissEditTask()
+        dismissDraft()
         persistAsync()
     }
 
-    public func deleteTask(target: EditableTaskTarget) {
-        let targetId = target.id
-        switch target {
-        case .focus:    state.focusJobs.removeAll(where: { $0.id == targetId })
-        case .baseline: state.baselineTasks.removeAll(where: { $0.id == targetId })
-        case .horizon:  state.upcomingEvents.removeAll(where: { $0.id == targetId })
-        }
-        dismissEditTask()
+    public func deleteTask(id: UUID) {
+        state.tasks.removeAll(where: { $0.id == id })
+        dismissDraft()
         persistAsync()
     }
 
-    public func dispatchConfiguredTask(
-        title: String,
-        tag: String,
-        durationMinutes: Int,
-        isOneTime: Bool,
-        repeatCount: Int,
-        repeatUnit: CadenceUnit,
-        healthState: TaskHealthState
-    ) {
-        let newId = UUID()
-        routeTaskAssignment(
-            id: newId,
-            title: title,
-            tag: tag,
-            durationMinutes: durationMinutes,
-            isOneTime: isOneTime,
-            repeatCount: repeatCount,
-            repeatUnit: repeatUnit,
-            healthState: healthState,
-            isCompleted: false
-        )
+    // MARK: - Task Execution & Completion
+    public func toggleTask(id: UUID) {
+        guard let idx = state.tasks.firstIndex(where: { $0.id == id }) else { return }
+        state.tasks[idx].isCompleted.toggle()
+        let task = state.tasks[idx]
 
-        if healthState == .good {
+        if task.isCompleted {
+            state.tasks[idx].lastCompletedAt = Date()
             let record = HistoryRecord(
-                jobId: newId,
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                tag: tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+                taskId: task.id,
+                title: task.title,
+                tag: task.tag,
                 completedAt: Date()
             )
             state.historyRecords.insert(record, at: 0)
+        } else {
+            if let recordIdx = state.historyRecords.firstIndex(where: { $0.taskId == task.id }) {
+                state.historyRecords.remove(at: recordIdx)
+            }
         }
-
         persistAsync()
     }
 
-    private func routeTaskAssignment(
-        id: UUID,
-        title: String,
-        tag: String,
-        durationMinutes: Int,
-        isOneTime: Bool,
-        repeatCount: Int,
-        repeatUnit: CadenceUnit,
-        healthState: TaskHealthState,
-        isCompleted: Bool
-    ) {
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        addCustomTag(cleanTag)
+    public func completeHorizonTask(id: UUID) {
+        guard let idx = state.tasks.firstIndex(where: { $0.id == id }) else { return }
+        let task = state.tasks[idx]
 
-        if healthState == .due || healthState == .overdue {
-            if !isOneTime && repeatUnit == .day && repeatCount == 1 {
-                let task = ChoreItem(
-                    id: id,
-                    title: cleanTitle,
-                    durationMinutes: durationMinutes,
-                    tag: cleanTag,
-                    isCompleted: isCompleted
-                )
-                state.baselineTasks.append(task)
-            } else {
-                let job = FocusJob(
-                    id: id,
-                    tag: cleanTag,
-                    title: cleanTitle,
-                    isCompleted: isCompleted,
-                    isOverdue: healthState == .overdue
-                )
-                state.focusJobs.append(job)
-            }
+        let record = HistoryRecord(
+            taskId: task.id,
+            title: task.title,
+            tag: task.tag,
+            completedAt: Date()
+        )
+        state.historyRecords.insert(record, at: 0)
+
+        if task.isOneTime {
+            state.tasks.remove(at: idx)
         } else {
-            let intervalDays = isOneTime ? 7 : repeatUnit.days(count: repeatCount)
-            let daysUntilDue = (healthState == .good) ? max(1, intervalDays) : max(1, intervalDays / 2)
-            let timeAnchor = Self.computeTimeAnchor(daysUntilDue: daysUntilDue)
-
-            let event = HorizonEvent(
-                id: id,
-                tag: cleanTag,
-                title: cleanTitle,
-                timeAnchor: timeAnchor,
-                repeatCount: repeatCount,
-                repeatUnit: repeatUnit,
-                healthState: healthState
-            )
-            state.upcomingEvents.append(event)
+            let intervalDays = task.recurrence?.intervalDays ?? 7
+            let nextDue = Calendar.current.date(byAdding: .day, value: intervalDays, to: Date()) ?? Date()
+            state.tasks[idx].dueDate = nextDue
+            state.tasks[idx].lastCompletedAt = Date()
+            state.tasks[idx].isCompleted = false
         }
+        persistAsync()
     }
 
-    public static func computeTimeAnchor(daysUntilDue: Int) -> String {
-        if daysUntilDue == 1 {
-            return "In 1 Day"
-        } else if daysUntilDue < 14 {
-            return "In \(daysUntilDue) Days"
-        } else if daysUntilDue < 60 {
-            let weeks = max(1, daysUntilDue / 7)
-            return "In \(weeks) Weeks (\(daysUntilDue)d)"
-        } else {
-            let months = max(1, daysUntilDue / 30)
-            return "In \(months) Months (\(daysUntilDue)d)"
+    public func resetDailyBaseline() {
+        for idx in state.tasks.indices where state.tasks[idx].isDailyBaseline {
+            state.tasks[idx].isCompleted = false
         }
+        persistAsync()
     }
 
+    // MARK: - Tag Management
     public func addCustomTag(_ tag: String) {
-        let clean = tag.components(separatedBy: CharacterSet(charactersIn: "·,"))[0]
-            .trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !clean.isEmpty else { return }
         if !state.customTags.contains(clean) {
             state.customTags.append(clean)
@@ -477,66 +499,13 @@ public final class DashboardStore {
         guard !clean.isEmpty else { return }
 
         state.customTags.removeAll(where: { $0.uppercased() == clean })
-
         let fallbackTag = clean == "GENERAL" ? "OPERATIONS" : "GENERAL"
 
-        for i in state.focusJobs.indices {
-            if state.focusJobs[i].tag.uppercased() == clean {
-                state.focusJobs[i].tag = fallbackTag
-            }
+        for i in state.tasks.indices where state.tasks[i].tag.uppercased() == clean {
+            state.tasks[i].tag = fallbackTag
         }
-        for i in state.baselineTasks.indices {
-            if state.baselineTasks[i].tag.uppercased() == clean {
-                state.baselineTasks[i].tag = fallbackTag
-            }
-        }
-        for i in state.upcomingEvents.indices {
-            if state.upcomingEvents[i].tag.uppercased() == clean {
-                state.upcomingEvents[i].tag = fallbackTag
-            }
-        }
-        for i in state.historyRecords.indices {
-            if state.historyRecords[i].tag.uppercased() == clean {
-                state.historyRecords[i].tag = fallbackTag
-            }
-        }
-
-        persistAsync()
-    }
-
-    public func deleteCustomTag(_ tag: String) {
-        deleteTag(tag)
-    }
-
-    public func toggleFocusJob(id: UUID) {
-        guard let idx = state.focusJobs.firstIndex(where: { $0.id == id }) else { return }
-        state.focusJobs[idx].isCompleted.toggle()
-        let job = state.focusJobs[idx]
-        syncHistoryRecord(taskId: job.id, title: job.title, tag: job.tag, isCompleted: job.isCompleted)
-    }
-
-    public func toggleBaselineTask(id: UUID) {
-        guard let idx = state.baselineTasks.firstIndex(where: { $0.id == id }) else { return }
-        state.baselineTasks[idx].isCompleted.toggle()
-        let task = state.baselineTasks[idx]
-        syncHistoryRecord(taskId: task.id, title: task.title, tag: task.tag, isCompleted: task.isCompleted)
-    }
-
-    private func syncHistoryRecord(taskId: UUID, title: String, tag: String, isCompleted: Bool) {
-        if isCompleted {
-            let record = HistoryRecord(jobId: taskId, title: title, tag: tag, completedAt: Date())
-            state.historyRecords.insert(record, at: 0)
-        } else {
-            if let recordIdx = state.historyRecords.firstIndex(where: { $0.jobId == taskId }) {
-                state.historyRecords.remove(at: recordIdx)
-            }
-        }
-        persistAsync()
-    }
-
-    public func resetDailyBaseline() {
-        for idx in state.baselineTasks.indices {
-            state.baselineTasks[idx].isCompleted = false
+        for i in state.historyRecords.indices where state.historyRecords[i].tag.uppercased() == clean {
+            state.historyRecords[i].tag = fallbackTag
         }
         persistAsync()
     }
@@ -545,13 +514,20 @@ public final class DashboardStore {
         Task {
             if let reloaded = await persistenceEngine.evaluateExternalChange() {
                 self.state = reloaded
+                self.rolloverRecurringTasksIfNeeded()
             }
         }
     }
 
+    // MARK: - Debounced Async Persistence
     private func persistAsync() {
+        persistTask?.cancel()
         let snapshot = state
-        Task { await persistenceEngine.write(snapshot) }
+        persistTask = Task { [persistenceEngine] in
+            try? await Task.sleep(for: .milliseconds(120))
+            guard !Task.isCancelled else { return }
+            await persistenceEngine.write(snapshot)
+        }
     }
 
     private static func loadInitialBlocking(from url: URL) -> DashboardState? {

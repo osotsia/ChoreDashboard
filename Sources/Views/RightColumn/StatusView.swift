@@ -2,18 +2,13 @@ import SwiftUI
 
 public struct StatusView: View {
     public var store: DashboardStore
-    public var onEditUpcomingEvent: ((HorizonEvent) -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
-    public init(
-        store: DashboardStore,
-        onEditUpcomingEvent: ((HorizonEvent) -> Void)? = nil
-    ) {
+    public init(store: DashboardStore) {
         self.store = store
-        self.onEditUpcomingEvent = onEditUpcomingEvent
     }
 
-    private var topFiveUpcoming: [HorizonEvent] {
+    private var topFiveUpcoming: [TaskItem] {
         Array(store.sortedUpcomingEvents.prefix(5))
     }
 
@@ -27,7 +22,7 @@ public struct StatusView: View {
                     Spacer()
                     Text("\(Int(store.todaySnapshot.clearanceRate * 100))% CLEAR")
                         .font(.system(size: 10 * s, weight: .black, design: .monospaced))
-                        .foregroundColor(store.todaySnapshot.clearanceRate == 1.0 ? Color(red: 16/255, green: 185/255, blue: 129/255) : .black)
+                        .foregroundColor(store.todaySnapshot.clearanceRate == 1.0 ? AppConfig.Colors.statusGreen : .black)
                 }
                 .padding(.vertical, 4 * s)
                 .padding(.horizontal, 8 * s)
@@ -63,7 +58,7 @@ public struct StatusView: View {
                         } else {
                             Text("ALL CURRENT")
                                 .font(.system(size: 8 * s, weight: .bold))
-                                .foregroundColor(Color(red: 16/255, green: 185/255, blue: 129/255))
+                                .foregroundColor(AppConfig.Colors.statusGreen)
                         }
                     }
                     .padding(8 * s)
@@ -104,7 +99,7 @@ public struct StatusView: View {
                     SectionBadge(text: "HORIZON QUEUE · NEXT 5 UP")
                         .foregroundColor(.black)
                     Spacer()
-                    Text("SHOWING 5 OF \(store.state.upcomingEvents.count)")
+                    Text("SHOWING \(topFiveUpcoming.count) OF \(store.upcomingEvents.count)")
                         .font(.system(size: 9 * s, weight: .bold, design: .monospaced))
                         .foregroundColor(AppConfig.Colors.subtextGrey)
                 }
@@ -130,7 +125,7 @@ public struct StatusView: View {
 
                                     Spacer()
 
-                                    Text(event.timeAnchor.uppercased())
+                                    Text(event.timeAnchor().uppercased())
                                         .font(.system(size: 9.5 * s, weight: .bold))
                                         .foregroundColor(.black)
                                 }
@@ -149,10 +144,16 @@ public struct StatusView: View {
                             .padding(.horizontal, 4 * s)
                             .contentShape(Rectangle())
                             .contextMenu {
-                                if let onEditUpcomingEvent = onEditUpcomingEvent {
-                                    Button { onEditUpcomingEvent(event) } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
+                                Button {
+                                    store.completeHorizonTask(id: event.id)
+                                } label: {
+                                    Label("Mark Complete Early", systemImage: "checkmark.circle")
+                                }
+
+                                Button {
+                                    store.startEditing(task: event)
+                                } label: {
+                                    Label("Edit Task", systemImage: "pencil")
                                 }
                             }
                         }
