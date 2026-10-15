@@ -166,12 +166,17 @@ public enum ChoreProjections {
     }
 
     public static func availableTags(for state: DashboardState) -> [String] {
-        var tags = Set<String>()
-        for tag in state.customTags { tags.insert(tag) }
-        for task in state.tasks { tags.insert(task.tag) }
-        for record in state.historyRecords { tags.insert(record.tag) }
+    var tags = Set<String>()
+    for tag in state.customTags { tags.insert(tag) }
+    for task in state.tasks { tags.insert(task.tag) }
+    for record in state.historyRecords { tags.insert(record.tag) }
 
-        let clean = tags.filter { !$0.isEmpty }.sorted()
-        return clean.isEmpty ? ["KITCHEN", "BATHROOM", "GENERAL", "SELF"] : clean
-    }
+    let clean = tags
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+        .filter { !$0.isEmpty }
+        .sorted()
+
+    let defaultFallback = ["BATHROOM", "GENERAL", "KITCHEN", "SELF"]
+    return clean.isEmpty ? defaultFallback : clean
+}
 }

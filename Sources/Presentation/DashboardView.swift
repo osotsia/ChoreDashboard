@@ -1,8 +1,18 @@
-// Sources/Views/DashboardView.swift
 import SwiftUI
 
-private struct LeftColumnAdaptiveLayout: Layout {
+struct LeftColumnAdaptiveLayout: Layout {
     let maxBottomRatio: CGFloat
+
+    static func calculateSplit(
+        boundsHeight: CGFloat,
+        bottomNaturalHeight: CGFloat,
+        maxBottomRatio: CGFloat
+    ) -> (topHeight: CGFloat, bottomHeight: CGFloat) {
+        let maxBottomHeight = boundsHeight * maxBottomRatio
+        let bottomHeight = max(0, min(bottomNaturalHeight, maxBottomHeight))
+        let topHeight = max(0, boundsHeight - bottomHeight)
+        return (topHeight, bottomHeight)
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? (AppConfig.baseWidth * AppConfig.splitRatio)
@@ -19,19 +29,21 @@ private struct LeftColumnAdaptiveLayout: Layout {
         let topView = subviews[0]
         let bottomView = subviews[1]
 
-        let maxBottomHeight = bounds.height * maxBottomRatio
         let bottomNaturalSize = bottomView.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
-        let bottomHeight = min(bottomNaturalSize.height, maxBottomHeight)
-        let topHeight = bounds.height - bottomHeight
+        let split = Self.calculateSplit(
+            boundsHeight: bounds.height,
+            bottomNaturalHeight: bottomNaturalSize.height,
+            maxBottomRatio: maxBottomRatio
+        )
 
         topView.place(
             at: CGPoint(x: bounds.minX, y: bounds.minY),
-            proposal: ProposedViewSize(width: bounds.width, height: topHeight)
+            proposal: ProposedViewSize(width: bounds.width, height: split.topHeight)
         )
 
         bottomView.place(
-            at: CGPoint(x: bounds.minX, y: bounds.maxY - bottomHeight),
-            proposal: ProposedViewSize(width: bounds.width, height: bottomHeight)
+            at: CGPoint(x: bounds.minX, y: bounds.maxY - split.bottomHeight),
+            proposal: ProposedViewSize(width: bounds.width, height: split.bottomHeight)
         )
     }
 }

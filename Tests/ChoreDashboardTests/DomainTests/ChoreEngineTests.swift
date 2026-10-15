@@ -2,7 +2,19 @@ import Testing
 import Foundation
 @testable import ChoreDashboard
 
-@Suite("ChoreEngine Mutation Tests")
+struct DueDateTestCase: Sendable, CustomTestStringConvertible {
+    let health: TaskHealthState
+    let isOneTime: Bool
+    let repeatCount: Int
+    let repeatUnit: CadenceUnit
+    let expectedDayOffset: Int
+
+    var testDescription: String {
+        "Health: \(health.rawValue), OneTime: \(isOneTime), Offset: \(expectedDayOffset)d"
+    }
+}
+
+@Suite("ChoreEngine State Transitions & Boundary Tests")
 struct ChoreEngineTests {
 
     private func makeCalendar() -> Calendar {
@@ -11,117 +23,297 @@ struct ChoreEngineTests {
         return cal
     }
 
-    private func makeClock() -> TestClock {
-        let date = Date(timeIntervalSince1970: 1777636800) // 2026-05-01 12:00:00 UTC
-        return TestClock(now: date, calendar: makeCalendar())
+    private func makeClock(year: Int = 2026, month: Int = 5, day: Int = 1) -> TestClock {
+        let cal = makeCalendar()
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        comps.day = day
+        comps.hour = 12
+        comps.minute = 0
+        comps.second = 0
+        let date = cal.date(from: comps)!
+        return TestClock(now: date, calendar: cal)
     }
 
-    @Test("toggleTask toggles completion and manages history entries")
-    func testToggleTask() {
+    // MARK: - Toggle Task
+
+    @Test("toggleTask completes an active task and appends a history record")
+    func testToggleTaskHappyPath() {
         let clock = makeClock()
         let taskId = UUID()
         let task = TaskItem(id: taskId, title: "Clean Floor", tag: "KITCHEN", isCompleted: false)
         var state = DashboardState(tasks: [task])
 
-        // First toggle: completes task, inserts history
         ChoreEngine.toggleTask(state: &state, id: taskId, clock: clock)
+
         #expect(state.tasks[0].isCompleted == true)
         #expect(state.tasks[0].lastCompletedAt == clock.now)
         #expect(state.historyRecords.count == 1)
         #expect(state.historyRecords[0].taskId == taskId)
+        #expect(state.historyRecords[0].completedAt == clock.now)
+    }
 
-        // Second toggle: uncompletes task, removes history
+    @Test("toggleTask uncompletes task and removes associated history record without affecting other records")
+    func testToggleTaskUncomplete() {
+        let clock = makeClock()
+        let taskId = UUID()
+        let otherTaskId = UUID()
+        let task = TaskItem(id: taskId, title: "Clean Floor", tag: "KITCHEN", isCompleted: true, lastCompletedAt: clock.now)
+        let recordToPreserve = HistoryRecord(taskId: otherTaskId, title: "Other", tag: "GENERAL", completedAt: clock.now)
+        let recordToRemove = HistoryRecord(taskId: taskId, title: "Clean Floor", tag: "KITCHEN", completedAt: clock.now)
+        var state = DashboardState(tasks: [task], historyRecords: [recordToRemove, recordToPreserve])
+
         ChoreEngine.toggleTask(state: &state, id: taskId, clock: clock)
+
+        #expect(state.tasks[0].isCompleted == false)
+        #expect(state.historyRecords.count == 1)
+        #expect(state.historyRecords[0].taskId == otherTaskId)
+    }
+
+    @Test("toggleTask with non-existent UUID performs no mutations")
+    func testToggleTaskNonExistentId() {
+        let clock = makeClock()
+        let task = TaskItem(title: "Existing", tag: "GENERAL")
+        var state = DashboardState(tasks: [task], historyRecords: [])
+
+        ChoreEngine.toggleTask(state: &state, id: UUID(), clock: clock)
+
         #expect(state.tasks[0].isCompleted == false)
         #expect(state.historyRecords.isEmpty)
     }
 
-    @Test("completeHorizonTask removes one-time tasks and logs history")
+    // MARK: - Horizon Completions
+
+    @Test("completeHorizonTask removes one-time task from inventory and records history")
     func testCompleteOneTimeHorizonTask() {
         let clock = makeClock()
         let taskId = UUID()
-        let task = TaskItem(id: taskId, title: "Buy Filter", tag: "GENERAL", recurrence: nil)
+        let task = TaskItem(id: taskId, title: "Order Filters", tag: "GENERAL", recurrence: nil)
         var state = DashboardState(tasks: [task])
 
         ChoreEngine.completeHorizonTask(state: &state, id: taskId, clock: clock)
+
         #expect(state.tasks.isEmpty)
         #expect(state.historyRecords.count == 1)
         #expect(state.historyRecords[0].taskId == taskId)
     }
 
-    @Test("completeHorizonTask advances recurring task due date by recurrence interval")
+    @Test("completeHorizonTask advances recurring task due date relative to execution time")
     func testCompleteRecurringHorizonTask() {
         let clock = makeClock()
         let taskId = UUID()
         let task = TaskItem(
             id: taskId,
-            title: "Replace Filter",
+            title: "Replace Air Filter",
             tag: "GENERAL",
-            recurrence: RecurrenceRule(count: 2, unit: .week)
+            dueDate: clock.now,
+            recurrence: RecurrenceRule(count: 3, unit: .month)
         )
         var state = DashboardState(tasks: [task])
 
         ChoreEngine.completeHorizonTask(state: &state, id: taskId, clock: clock)
+
         #expect(state.tasks.count == 1)
         #expect(state.tasks[0].isCompleted == false)
-        let expectedDue = clock.calendar.date(byAdding: .day, value: 14, to: clock.now)!
+        let expectedDue = clock.calendar.date(byAdding: .day, value: 90, to: clock.now)!
         #expect(state.tasks[0].dueDate == expectedDue)
-        #expect(state.historyRecords.count == 1)
+        #expect(state.tasks[0].lastCompletedAt == clock.now)
     }
 
-    @Test("resetDailyBaseline unchecks baseline tasks and removes today's records")
-    func testResetDailyBaseline() {
+    @Test("completeHorizonTask ignores non-existent ID")
+    func testCompleteHorizonTaskMissingId() {
         let clock = makeClock()
-        let baselineId = UUID()
-        let focusId = UUID()
+        var state = DashboardState(tasks: [TaskItem(title: "Task", tag: "GENERAL")])
 
-        let baselineTask = TaskItem(
-            id: baselineId,
-            title: "Morning Stretch",
-            tag: "SELF",
-            isCompleted: true,
-            lastCompletedAt: clock.now,
-            recurrence: RecurrenceRule(count: 1, unit: .day)
-        )
-        let focusTask = TaskItem(
-            id: focusId,
-            title: "Deep Clean",
-            tag: "KITCHEN",
-            isCompleted: true,
-            lastCompletedAt: clock.now,
-            recurrence: RecurrenceRule(count: 1, unit: .week)
-        )
+        ChoreEngine.completeHorizonTask(state: &state, id: UUID(), clock: clock)
+
+        #expect(state.tasks.count == 1)
+        #expect(state.historyRecords.isEmpty)
+    }
+
+    // MARK: - Baseline Reset
+
+    @Test("resetDailyBaseline resets only tasks completed today and purges today's history")
+    func testResetDailyBaselineSelectivity() {
+        let cal = makeCalendar()
+        let todayClock = makeClock(year: 2026, month: 5, day: 2)
+        let yesterday = cal.date(byAdding: .day, value: -1, to: todayClock.now)!
+
+        let b1 = TaskItem(id: UUID(), title: "B1", tag: "SELF", isCompleted: true, lastCompletedAt: todayClock.now, recurrence: RecurrenceRule(count: 1, unit: .day))
+        let b2 = TaskItem(id: UUID(), title: "B2", tag: "SELF", isCompleted: true, lastCompletedAt: yesterday, recurrence: RecurrenceRule(count: 1, unit: .day))
+        let focus = TaskItem(id: UUID(), title: "Focus", tag: "KITCHEN", isCompleted: true, lastCompletedAt: todayClock.now, recurrence: RecurrenceRule(count: 1, unit: .week))
 
         var state = DashboardState(
-            tasks: [baselineTask, focusTask],
+            tasks: [b1, b2, focus],
             historyRecords: [
-                HistoryRecord(taskId: baselineId, title: "Morning Stretch", tag: "SELF", completedAt: clock.now),
-                HistoryRecord(taskId: focusId, title: "Deep Clean", tag: "KITCHEN", completedAt: clock.now)
+                HistoryRecord(taskId: b1.id, title: "B1", tag: "SELF", completedAt: todayClock.now),
+                HistoryRecord(taskId: b2.id, title: "B2", tag: "SELF", completedAt: yesterday),
+                HistoryRecord(taskId: focus.id, title: "Focus", tag: "KITCHEN", completedAt: todayClock.now)
             ]
         )
 
-        ChoreEngine.resetDailyBaseline(state: &state, clock: clock)
+        ChoreEngine.resetDailyBaseline(state: &state, clock: todayClock)
 
         #expect(state.tasks[0].isCompleted == false)
         #expect(state.tasks[0].lastCompletedAt == nil)
-        // Focus task must remain unaffected
-        #expect(state.tasks[1].isCompleted == true)
-        // History: only focus record survives
-        #expect(state.historyRecords.count == 1)
-        #expect(state.historyRecords[0].taskId == focusId)
+
+        #expect(state.tasks[1].isCompleted == false)
+        #expect(state.tasks[1].lastCompletedAt == yesterday)
+
+        #expect(state.tasks[2].isCompleted == true)
+
+        #expect(state.historyRecords.count == 2)
+        #expect(!state.historyRecords.contains(where: { $0.taskId == b1.id }))
+        #expect(state.historyRecords.contains(where: { $0.taskId == b2.id }))
+        #expect(state.historyRecords.contains(where: { $0.taskId == focus.id }))
     }
 
-    @Test("deleteTag reassigns referencing tasks and history to fallback tag")
-    func testDeleteTagCascadesFallback() {
-        let taskId = UUID()
-        let task = TaskItem(id: taskId, title: "Special Job", tag: "CUSTOM")
-        let history = HistoryRecord(taskId: taskId, title: "Special Job", tag: "CUSTOM")
-        var state = DashboardState(tasks: [task], historyRecords: [history], customTags: ["CUSTOM"])
+    // MARK: - Upsert & Delete
+
+    @Test("upsertTask inserts new task, appends to task array, and registers its tag")
+    func testUpsertTaskNew() {
+        var state = DashboardState(tasks: [], customTags: ["GENERAL"])
+        let newTask = TaskItem(title: "Scrub Drain", tag: "PLUMBING")
+
+        ChoreEngine.upsertTask(state: &state, task: newTask)
+
+        #expect(state.tasks.count == 1)
+        #expect(state.tasks[0].id == newTask.id)
+        #expect(state.tasks[0].title == "Scrub Drain")
+        #expect(state.customTags.contains("PLUMBING"))
+    }
+
+    @Test("upsertTask updates an existing task in place without duplicating")
+    func testUpsertTaskExisting() {
+        let existingId = UUID()
+        let original = TaskItem(id: existingId, title: "Old Title", tag: "GENERAL", durationMinutes: 10)
+        var state = DashboardState(tasks: [original], customTags: ["GENERAL"])
+
+        var modified = original
+        modified.title = "New Title"
+        modified.durationMinutes = 25
+
+        ChoreEngine.upsertTask(state: &state, task: modified)
+
+        #expect(state.tasks.count == 1)
+        #expect(state.tasks[0].id == existingId)
+        #expect(state.tasks[0].title == "New Title")
+        #expect(state.tasks[0].durationMinutes == 25)
+    }
+
+    @Test("deleteTask removes target task by ID and leaves non-matching tasks intact")
+    func testDeleteTask() {
+        let id1 = UUID()
+        let id2 = UUID()
+        let task1 = TaskItem(id: id1, title: "T1", tag: "GENERAL")
+        let task2 = TaskItem(id: id2, title: "T2", tag: "GENERAL")
+        var state = DashboardState(tasks: [task1, task2])
+
+        ChoreEngine.deleteTask(state: &state, id: id1)
+        #expect(state.tasks.count == 1)
+        #expect(state.tasks[0].id == id2)
+
+        ChoreEngine.deleteTask(state: &state, id: UUID())
+        #expect(state.tasks.count == 1)
+        #expect(state.tasks[0].id == id2)
+    }
+
+    // MARK: - Tag Management & Deduplication
+
+    @Test("isValidTag evaluates formatting rules and rejects punctuation characters")
+    func testIsValidTagValidation() {
+        #expect(ChoreEngine.isValidTag("VALID") == true)
+        #expect(ChoreEngine.isValidTag("DEEP CLEAN") == true)
+        #expect(ChoreEngine.isValidTag("") == false)
+        #expect(ChoreEngine.isValidTag("   ") == false)
+        #expect(ChoreEngine.isValidTag("TAG·WITH·DOT") == false)
+        #expect(ChoreEngine.isValidTag("TAG,WITH,COMMA") == false)
+    }
+
+    @Test("addCustomTag sanitizes whitespace, uppercases, prevents duplicates, and ignores invalid strings")
+    func testAddCustomTagSanitization() {
+        var state = DashboardState(customTags: ["EXISTING"])
+
+        ChoreEngine.addCustomTag(state: &state, tag: "  new_tag  \n")
+        ChoreEngine.addCustomTag(state: &state, tag: "EXISTING")
+        ChoreEngine.addCustomTag(state: &state, tag: "   ")
+        ChoreEngine.addCustomTag(state: &state, tag: "INVALID·TAG")
+
+        #expect(state.customTags.count == 2)
+        #expect(state.customTags.contains("NEW_TAG"))
+        #expect(!state.customTags.contains("INVALID·TAG"))
+    }
+
+    @Test("deleteTag reassigns tasks and history; uses OPERATIONS when GENERAL is deleted and updates customTags")
+    func testDeleteTagFallbackRouting() {
+        let taskGeneral = TaskItem(title: "T1", tag: "GENERAL")
+        let historyGeneral = HistoryRecord(title: "H1", tag: "GENERAL")
+        let taskCustom = TaskItem(title: "T2", tag: "CUSTOM")
+        let historyCustom = HistoryRecord(title: "H2", tag: "CUSTOM")
+
+        var state = DashboardState(
+            tasks: [taskGeneral, taskCustom],
+            historyRecords: [historyGeneral, historyCustom],
+            customTags: ["GENERAL", "CUSTOM"]
+        )
 
         ChoreEngine.deleteTag(state: &state, tag: "CUSTOM")
-
         #expect(!state.customTags.contains("CUSTOM"))
-        #expect(state.tasks[0].tag == "GENERAL")
-        #expect(state.historyRecords[0].tag == "GENERAL")
+        #expect(state.customTags.contains("GENERAL"))
+        #expect(state.tasks[1].tag == "GENERAL")
+        #expect(state.historyRecords[1].tag == "GENERAL")
+
+        ChoreEngine.deleteTag(state: &state, tag: "GENERAL")
+        #expect(!state.customTags.contains("GENERAL"))
+        #expect(state.customTags.contains("OPERATIONS"))
+        #expect(state.tasks[0].tag == "OPERATIONS")
+        #expect(state.historyRecords[0].tag == "OPERATIONS")
+    }
+
+    // MARK: - Parameterized Calculate Due Date Heuristics
+
+    @Test(
+        "calculateDueDate accurately projects dates across health states and cadences",
+        arguments: [
+            DueDateTestCase(health: .overdue, isOneTime: true, repeatCount: 1, repeatUnit: .day, expectedDayOffset: -1),
+            DueDateTestCase(health: .due, isOneTime: true, repeatCount: 1, repeatUnit: .day, expectedDayOffset: 0),
+            DueDateTestCase(health: .good, isOneTime: true, repeatCount: 2, repeatUnit: .week, expectedDayOffset: 14),
+            DueDateTestCase(health: .overdue, isOneTime: false, repeatCount: 20, repeatUnit: .day, expectedDayOffset: -1),
+            DueDateTestCase(health: .due, isOneTime: false, repeatCount: 20, repeatUnit: .day, expectedDayOffset: 0),
+            DueDateTestCase(health: .halfway, isOneTime: false, repeatCount: 20, repeatUnit: .day, expectedDayOffset: 10),
+            DueDateTestCase(health: .notYet, isOneTime: false, repeatCount: 20, repeatUnit: .day, expectedDayOffset: 15),
+            DueDateTestCase(health: .good, isOneTime: false, repeatCount: 20, repeatUnit: .day, expectedDayOffset: 20)
+        ]
+    )
+    func testCalculateDueDateBranches(testCase: DueDateTestCase) {
+        let cal = makeCalendar()
+        let clock = makeClock(year: 2026, month: 5, day: 10)
+        let recurrence = testCase.isOneTime ? nil : RecurrenceRule(count: testCase.repeatCount, unit: testCase.repeatUnit)
+
+        let calculatedDate = ChoreEngine.calculateDueDate(
+            health: testCase.health,
+            recurrence: recurrence,
+            isOneTime: testCase.isOneTime,
+            repeatCount: testCase.repeatCount,
+            repeatUnit: testCase.repeatUnit,
+            clock: clock
+        )
+
+        let offset = cal.dateComponents([.day], from: clock.now, to: calculatedDate).day ?? 0
+        #expect(offset == testCase.expectedDayOffset)
+    }
+
+    @Test("calculateDueDate handles minimal single-day cadence intervals gracefully")
+    func testCalculateDueDateMinimalIntervalDefense() {
+        let cal = makeCalendar()
+        let clock = makeClock(year: 2026, month: 5, day: 10)
+        let singleDayRecurrence = RecurrenceRule(count: 1, unit: .day)
+
+        let recHalf = ChoreEngine.calculateDueDate(health: .halfway, recurrence: singleDayRecurrence, isOneTime: false, repeatCount: 1, repeatUnit: .day, clock: clock)
+        #expect(cal.dateComponents([.day], from: clock.now, to: recHalf).day == 1)
+
+        let recNotYet = ChoreEngine.calculateDueDate(health: .notYet, recurrence: singleDayRecurrence, isOneTime: false, repeatCount: 1, repeatUnit: .day, clock: clock)
+        #expect(cal.dateComponents([.day], from: clock.now, to: recNotYet).day == 1)
     }
 }

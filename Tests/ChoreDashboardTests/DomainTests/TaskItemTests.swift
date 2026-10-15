@@ -2,7 +2,25 @@ import Testing
 import Foundation
 @testable import ChoreDashboard
 
-@Suite("Task Item Domain Model Tests")
+struct HealthRatioThresholdCase: Sendable, CustomTestStringConvertible {
+    let daysRemaining: Int
+    let expectedState: TaskHealthState
+
+    var testDescription: String {
+        "\(daysRemaining)% remaining -> \(expectedState.rawValue)"
+    }
+}
+
+struct TimeAnchorFormattingCase: Sendable, CustomTestStringConvertible {
+    let daysOffset: Int
+    let expectedString: String
+
+    var testDescription: String {
+        "Offset \(daysOffset)d -> \"\(expectedString)\""
+    }
+}
+
+@Suite("TaskItem Health Heuristics & Cadence Unit Tests")
 struct TaskItemTests {
 
     private func makeCalendar() -> Calendar {
@@ -12,74 +30,133 @@ struct TaskItemTests {
     }
 
     private func makeReferenceDate() -> Date {
-        // 2026-05-01 12:00:00 UTC
-        Date(timeIntervalSince1970: 1777636800)
+        let cal = makeCalendar()
+        var comps = DateComponents()
+        comps.year = 2026
+        comps.month = 5
+        comps.day = 1
+        comps.hour = 12
+        return cal.date(from: comps)!
     }
 
-    @Test("HealthState evaluates to DUE when start of due date equals start of current day")
-    func testHealthStateDueToday() {
+    // MARK: - Health Runway Boundaries
+
+    @Test("HealthState evaluates to .good when task is marked complete")
+    func testHealthStateCompleted() {
         let cal = makeCalendar()
-        let refDate = makeReferenceDate()
-        let clock = TestClock(now: refDate, calendar: cal)
+        let now = makeReferenceDate()
+        let overdueDate = cal.date(byAdding: .day, value: -10, to: now)!
 
-        let task = TaskItem(
-            title: "Test Task",
-            tag: "TEST",
-            isCompleted: false,
-            dueDate: refDate,
-            recurrence: RecurrenceRule(count: 1, unit: .week)
-        )
-
-        #expect(task.healthState(using: clock) == .due)
+        let task = TaskItem(title: "Task", tag: "TEST", isCompleted: true, dueDate: overdueDate)
+        #expect(task.healthState(relativeTo: now, calendar: cal) == .good)
     }
 
-    @Test("HealthState evaluates to OVERDUE when due date is in the past")
-    func testHealthStateOverdue() {
+    @Test("HealthState identifies .due and .overdue boundaries correctly")
+    func testHealthStateImmediateBoundaries() {
         let cal = makeCalendar()
-        let refDate = makeReferenceDate()
-        let yesterday = cal.date(byAdding: .day, value: -1, to: refDate)!
-        let clock = TestClock(now: refDate, calendar: cal)
+        let now = makeReferenceDate()
 
-        let task = TaskItem(
-            title: "Overdue Task",
-            tag: "TEST",
-            isCompleted: false,
-            dueDate: yesterday,
-            recurrence: RecurrenceRule(count: 1, unit: .week)
-        )
+        let dueToday = TaskItem(title: "Today", tag: "TEST", dueDate: now)
+        #expect(dueToday.healthState(relativeTo: now, calendar: cal) == .due)
 
-        #expect(task.healthState(using: clock) == .overdue)
+        let yesterday = cal.date(byAdding: .day, value: -1, to: now)!
+        let overdueTask = TaskItem(title: "Overdue", tag: "TEST", dueDate: yesterday)
+        #expect(overdueTask.healthState(relativeTo: now, calendar: cal) == .overdue)
     }
 
-    @Test("HealthState returns GOOD when task is completed, regardless of due date")
-    func testHealthStateCompletedIsGood() {
+    @Test(
+        "HealthState evaluates exact 85%, 60%, and 35% ratio thresholds",
+        arguments: [
+            HealthRatioThresholdCase(daysRemaining: 85, expectedState: .good),
+            HealthRatioThresholdCase(daysRemaining: 84, expectedState: .notYet),
+            HealthRatioThresholdCase(daysRemaining: 60, expectedState: .notYet),
+            HealthRatioThresholdCase(daysRemaining: 59, expectedState: .halfway),
+            HealthRatioThresholdCase(daysRemaining: 35, expectedState: .halfway),
+            HealthRatioThresholdCase(daysRemaining: 34, expectedState: .due)
+        ]
+    )
+    func testHealthStateRatios(testCase: HealthRatioThresholdCase) {
         let cal = makeCalendar()
-        let refDate = makeReferenceDate()
-        let past = cal.date(byAdding: .day, value: -5, to: refDate)!
-        let clock = TestClock(now: refDate, calendar: cal)
+        let now = makeReferenceDate()
+        let rule = RecurrenceRule(count: 100, unit: .day)
 
-        let task = TaskItem(
-            title: "Completed Task",
-            tag: "TEST",
-            isCompleted: true,
-            dueDate: past,
-            recurrence: RecurrenceRule(count: 1, unit: .week)
-        )
-
-        #expect(task.healthState(using: clock) == .good)
+        let targetDate = cal.date(byAdding: .day, value: testCase.daysRemaining, to: now)!
+        let task = TaskItem(title: "Task", tag: "TEST", dueDate: targetDate, recurrence: rule)
+        #expect(task.healthState(relativeTo: now, calendar: cal) == testCase.expectedState)
     }
 
-    @Test("Estimated days remaining returns zero for overdue or due tasks")
-    func testEstimatedDaysRemaining() {
+    // MARK: - Time Anchors
+
+    @Test(
+        "timeAnchor outputs formatted strings across all calendar horizons",
+        arguments: [
+            TimeAnchorFormattingCase(daysOffset: -4, expectedString: "Overdue (4d)"),
+            TimeAnchorFormattingCase(daysOffset: 0, expectedString: "Today"),
+            TimeAnchorFormattingCase(daysOffset: 1, expectedString: "In 1 Day"),
+            TimeAnchorFormattingCase(daysOffset: 6, expectedString: "In 6 Days"),
+            TimeAnchorFormattingCase(daysOffset: 21, expectedString: "In 3 Weeks (21d)"),
+            TimeAnchorFormattingCase(daysOffset: 90, expectedString: "In 3 Months (90d)"),
+            TimeAnchorFormattingCase(daysOffset: 365, expectedString: "In 12 Months (365d)"),
+            TimeAnchorFormattingCase(daysOffset: -500, expectedString: "Overdue (500d)")
+        ]
+    )
+    func testTimeAnchorStringFormatting(testCase: TimeAnchorFormattingCase) {
         let cal = makeCalendar()
-        let refDate = makeReferenceDate()
-        let past = cal.date(byAdding: .day, value: -3, to: refDate)!
+        let now = makeReferenceDate()
+        let target = cal.date(byAdding: .day, value: testCase.daysOffset, to: now)!
+        let task = TaskItem(title: "T", tag: "TEST", dueDate: target)
+        #expect(task.timeAnchor(relativeTo: now, calendar: cal) == testCase.expectedString)
+    }
 
-        let overdueTask = TaskItem(title: "Task", tag: "TEST", dueDate: past)
-        #expect(overdueTask.estimatedDaysRemaining(relativeTo: refDate, calendar: cal) == 0)
+    // MARK: - Cadence Units
 
-        let future = cal.date(byAdding: .day, value: 4, to: refDate)!
-        let futureTask = TaskItem(title: "Task", tag: "TEST", dueDate: future)
-        #expect(futureTask.estimatedDaysRemaining(relativeTo: refDate, calendar: cal) == 4)
+    @Test("CadenceUnit correctly computes days and supports circular navigation")
+    func testCadenceUnitMethods() {
+        #expect(CadenceUnit.day.days(count: 3) == 3)
+        #expect(CadenceUnit.week.days(count: 2) == 14)
+        #expect(CadenceUnit.month.days(count: 3) == 90)
+        #expect(CadenceUnit.year.days(count: 1) == 365)
+
+        #expect(CadenceUnit.day.next() == .week)
+        #expect(CadenceUnit.week.next() == .month)
+        #expect(CadenceUnit.month.next() == .year)
+        #expect(CadenceUnit.year.next() == .day)
+
+        #expect(CadenceUnit.day.previous() == .year)
+        #expect(CadenceUnit.year.previous() == .month)
+    }
+
+    @Test("isDailyBaseline returns true only for exactly 1-day recurring tasks")
+    func testIsDailyBaseline() {
+        let daily = TaskItem(title: "Daily", tag: "TEST", recurrence: RecurrenceRule(count: 1, unit: .day))
+        let twoDay = TaskItem(title: "TwoDay", tag: "TEST", recurrence: RecurrenceRule(count: 2, unit: .day))
+        let weekly = TaskItem(title: "Weekly", tag: "TEST", recurrence: RecurrenceRule(count: 1, unit: .week))
+        let oneTime = TaskItem(title: "OneTime", tag: "TEST", recurrence: nil)
+
+        #expect(daily.isDailyBaseline == true)
+        #expect(twoDay.isDailyBaseline == false)
+        #expect(weekly.isDailyBaseline == false)
+        #expect(oneTime.isDailyBaseline == false)
+    }
+
+    // MARK: - Clamping & Extreme Horizon Limits
+
+    @Test("TaskItem clamps zero and negative duration to a positive single minute")
+    func testTaskItemNegativeDurationClamping() {
+        let zeroDuration = TaskItem(title: "Zero", tag: "TEST", durationMinutes: 0)
+        let negativeDuration = TaskItem(title: "Negative", tag: "TEST", durationMinutes: -45)
+
+        #expect(zeroDuration.durationMinutes == 1)
+        #expect(negativeDuration.durationMinutes == 1)
+    }
+
+    @Test("estimatedDaysRemaining clamps to zero when task is overdue")
+    func testEstimatedDaysRemainingFloorClamping() {
+        let cal = makeCalendar()
+        let now = makeReferenceDate()
+        let overdueDate = cal.date(byAdding: .day, value: -12, to: now)!
+
+        let overdueTask = TaskItem(title: "Overdue", tag: "TEST", dueDate: overdueDate)
+        #expect(overdueTask.estimatedDaysRemaining(relativeTo: now, calendar: cal) == 0)
     }
 }

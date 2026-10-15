@@ -18,10 +18,9 @@ public struct TaskEditorView: View {
     private var isTagValid: Bool {
         guard let draft = draft else { return false }
         if isCreatingCustomTag {
-            let clean = customTagText.trimmingCharacters(in: .whitespacesAndNewlines)
-            return !clean.isEmpty && clean.rangeOfCharacter(from: CharacterSet(charactersIn: "·,")) == nil
+            return ChoreEngine.isValidTag(customTagText)
         }
-        return !draft.tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return ChoreEngine.isValidTag(draft.tag)
     }
 
     private var isValid: Bool {

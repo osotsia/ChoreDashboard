@@ -51,6 +51,7 @@ public final class DashboardStore {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 if let updated = try? await self.persistenceClient.evaluateExternalChange() {
+                    self.persistTask?.cancel()
                     self.state = updated
                     self.rolloverRecurringTasksIfNeeded()
                 }
@@ -206,9 +207,11 @@ public final class DashboardStore {
         persistAsync()
     }
 
-    public func reloadFromDisk() {
+    @discardableResult
+    public func reloadFromDisk() -> Task<Void, Never> {
         Task {
             if let reloaded = try? await persistenceClient.evaluateExternalChange() {
+                self.persistTask?.cancel()
                 self.state = reloaded
                 self.rolloverRecurringTasksIfNeeded()
             }
@@ -216,6 +219,14 @@ public final class DashboardStore {
     }
 
     // MARK: - Data Export
+    public func exportState(to targetURL: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(state)
+        try data.write(to: targetURL, options: .atomic)
+    }
+
     @MainActor
     public func exportStateToDisk() {
         let panel = NSSavePanel()
@@ -229,11 +240,7 @@ public final class DashboardStore {
 
         if panel.runModal() == .OK, let targetURL = panel.url {
             do {
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                encoder.dateEncodingStrategy = .iso8601
-                let data = try encoder.encode(state)
-                try data.write(to: targetURL, options: .atomic)
+                try exportState(to: targetURL)
             } catch {
                 print("[DashboardStore] Export failed: \(error)")
             }
@@ -241,6 +248,10 @@ public final class DashboardStore {
     }
 
     // MARK: - Async Persistence Dispatch
+    public func flushPersistTask() async {
+        await persistTask?.value
+    }
+
     private func persistAsync() {
         persistTask?.cancel()
         let snapshot = state

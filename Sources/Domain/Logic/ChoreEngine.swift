@@ -106,10 +106,17 @@ public enum ChoreEngine {
         state.tasks.removeAll(where: { $0.id == id })
     }
 
+    /// Validates whether a tag string contains valid formatting and characters.
+    public static func isValidTag(_ tag: String) -> Bool {
+        let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return false }
+        return clean.rangeOfCharacter(from: CharacterSet(charactersIn: "·,")) == nil
+    }
+
     /// Registers a new custom system tag.
     public static func addCustomTag(state: inout DashboardState, tag: String) {
         let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !clean.isEmpty else { return }
+        guard isValidTag(clean) else { return }
         if !state.customTags.contains(clean) {
             state.customTags.append(clean)
         }
@@ -122,6 +129,9 @@ public enum ChoreEngine {
 
         state.customTags.removeAll(where: { $0.uppercased() == clean })
         let fallbackTag = clean == "GENERAL" ? "OPERATIONS" : "GENERAL"
+        if !state.customTags.contains(fallbackTag) {
+            state.customTags.append(fallbackTag)
+        }
 
         for i in state.tasks.indices where state.tasks[i].tag.uppercased() == clean {
             state.tasks[i].tag = fallbackTag

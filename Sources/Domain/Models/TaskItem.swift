@@ -46,6 +46,18 @@ public struct RecurrenceRule: Codable, Equatable, Sendable {
     public var intervalDays: Int {
         unit.days(count: count)
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case count
+        case unit
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let rawCount = try container.decode(Int.self, forKey: .count)
+        self.count = max(1, rawCount)
+        self.unit = try container.decode(CadenceUnit.self, forKey: .unit)
+    }
 }
 
 // MARK: - Unified Task Item
@@ -77,6 +89,31 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.dueDate = dueDate
         self.lastCompletedAt = lastCompletedAt
         self.recurrence = recurrence
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case tag
+        case durationMinutes
+        case isCompleted
+        case dueDate
+        case lastCompletedAt
+        case recurrence
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.title = try container.decode(String.self, forKey: .title)
+        let rawTag = try container.decode(String.self, forKey: .tag)
+        self.tag = rawTag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let rawDuration = try container.decode(Int.self, forKey: .durationMinutes)
+        self.durationMinutes = max(1, rawDuration)
+        self.isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
+        self.dueDate = try container.decode(Date.self, forKey: .dueDate)
+        self.lastCompletedAt = try container.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
+        self.recurrence = try container.decodeIfPresent(RecurrenceRule.self, forKey: .recurrence)
     }
 
     public var isDailyBaseline: Bool {
