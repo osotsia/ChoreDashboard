@@ -48,25 +48,6 @@ public struct RecurrenceRule: Codable, Equatable, Sendable {
     }
 }
 
-// MARK: - Task Health State (5-Tier Runway)
-public enum TaskHealthState: String, CaseIterable, Codable, Sendable {
-    case good = "GOOD"         // 100% Runway
-    case notYet = "NOT YET"     // 75% Runway
-    case halfway = "HALF"       // 50% Runway
-    case due = "DUE"           // 25% Runway (Due Today)
-    case overdue = "OVERDUE"   // 0% Runway (Decay Hazard)
-
-    public var subtitle: String {
-        switch self {
-        case .good:    return "FRESH"
-        case .notYet:  return "RUNNING"
-        case .halfway: return "MIDWAY"
-        case .due:     return "TODAY"
-        case .overdue: return "URGENT"
-        }
-    }
-}
-
 // MARK: - Unified Task Item
 public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
@@ -107,12 +88,11 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         recurrence == nil
     }
 
-    public func healthState(relativeTo now: Date = Date()) -> TaskHealthState {
+    public func healthState(relativeTo now: Date = Date(), calendar: Calendar = Calendar.current) -> TaskHealthState {
         if isCompleted {
             return .good
         }
 
-        let calendar = Calendar.current
         let startOfNow = calendar.startOfDay(for: now)
         let startOfDue = calendar.startOfDay(for: dueDate)
 
@@ -137,16 +117,18 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         }
     }
 
-    public func estimatedDaysRemaining(relativeTo now: Date = Date()) -> Int {
-        let calendar = Calendar.current
+    public func healthState(using clock: Clock) -> TaskHealthState {
+        healthState(relativeTo: clock.now, calendar: clock.calendar)
+    }
+
+    public func estimatedDaysRemaining(relativeTo now: Date = Date(), calendar: Calendar = Calendar.current) -> Int {
         let startOfNow = calendar.startOfDay(for: now)
         let startOfDue = calendar.startOfDay(for: dueDate)
         let days = calendar.dateComponents([.day], from: startOfNow, to: startOfDue).day ?? 0
         return max(0, days)
     }
 
-    public func timeAnchor(relativeTo now: Date = Date()) -> String {
-        let calendar = Calendar.current
+    public func timeAnchor(relativeTo now: Date = Date(), calendar: Calendar = Calendar.current) -> String {
         let startOfNow = calendar.startOfDay(for: now)
         let startOfDue = calendar.startOfDay(for: dueDate)
         let days = calendar.dateComponents([.day], from: startOfNow, to: startOfDue).day ?? 0
