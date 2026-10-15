@@ -48,17 +48,19 @@ public struct RecurrenceRule: Codable, Equatable, Sendable {
     }
 }
 
-// MARK: - Task Health State
+// MARK: - Task Health State (5-Tier Runway)
 public enum TaskHealthState: String, CaseIterable, Codable, Sendable {
-    case good = "GOOD"
-    case notYet = "NOT YET"
-    case due = "DUE"
-    case overdue = "OVERDUE"
+    case good = "GOOD"         // 100% Runway
+    case notYet = "NOT YET"     // 75% Runway
+    case halfway = "HALF"       // 50% Runway
+    case due = "DUE"           // 25% Runway (Due Today)
+    case overdue = "OVERDUE"   // 0% Runway (Decay Hazard)
 
     public var subtitle: String {
         switch self {
         case .good:    return "FRESH"
         case .notYet:  return "RUNNING"
+        case .halfway: return "MIDWAY"
         case .due:     return "TODAY"
         case .overdue: return "URGENT"
         }
@@ -66,7 +68,6 @@ public enum TaskHealthState: String, CaseIterable, Codable, Sendable {
 }
 
 // MARK: - Unified Task Item
-/// Unified ground-truth model representing any chore, focus job, or scheduled horizon item.
 public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public var title: String
@@ -75,7 +76,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var isCompleted: Bool
     public var dueDate: Date
     public var lastCompletedAt: Date?
-    public var recurrence: RecurrenceRule? // nil indicates a one-time execution
+    public var recurrence: RecurrenceRule?
 
     public init(
         id: UUID = UUID(),
@@ -97,9 +98,6 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.recurrence = recurrence
     }
 
-    // MARK: - Derived Classifications
-    
-    /// Daily baseline chores are recurring every 24 hours.
     public var isDailyBaseline: Bool {
         guard let recurrence = recurrence else { return false }
         return recurrence.unit == .day && recurrence.count == 1
@@ -109,7 +107,6 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         recurrence == nil
     }
 
-    /// Dynamic evaluation of health state relative to a given point in time.
     public func healthState(relativeTo now: Date = Date()) -> TaskHealthState {
         if isCompleted {
             return .good
@@ -126,11 +123,20 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         } else {
             let daysUntilDue = calendar.dateComponents([.day], from: startOfNow, to: startOfDue).day ?? 0
             let intervalDays = recurrence?.intervalDays ?? 7
-            return daysUntilDue <= max(1, intervalDays / 2) ? .notYet : .good
+            let ratio = Double(daysUntilDue) / Double(max(1, intervalDays))
+
+            if ratio >= 0.85 {
+                return .good
+            } else if ratio >= 0.60 {
+                return .notYet
+            } else if ratio >= 0.35 {
+                return .halfway
+            } else {
+                return .due
+            }
         }
     }
 
-    /// Number of calendar days remaining until task is due.
     public func estimatedDaysRemaining(relativeTo now: Date = Date()) -> Int {
         let calendar = Calendar.current
         let startOfNow = calendar.startOfDay(for: now)
@@ -139,7 +145,6 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         return max(0, days)
     }
 
-    /// Human-readable time anchor string dynamically derived from due date.
     public func timeAnchor(relativeTo now: Date = Date()) -> String {
         let calendar = Calendar.current
         let startOfNow = calendar.startOfDay(for: now)

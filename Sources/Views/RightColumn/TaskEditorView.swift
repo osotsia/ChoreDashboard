@@ -29,15 +29,23 @@ public struct TaskEditorView: View {
         return !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && isTagValid
     }
 
+    private var isOneTimeInFuture: Bool {
+        guard let draft = draft else { return false }
+        return draft.isOneTime && draft.initialHealthState != .due && draft.initialHealthState != .overdue
+    }
+
     private var routingInfo: (icon: String, text: String, isImmediate: Bool) {
         guard let draft = draft else { return ("questionmark", "", false) }
 
         if draft.isOneTime {
-            switch draft.initialHealthState {
-            case .due, .overdue:
+            if draft.initialHealthState == .overdue {
+                return ("exclamationmark.triangle.fill", "Overdue hazard: Assigned high priority on Active Focus.", true)
+            } else if draft.initialHealthState == .due {
                 return ("bolt.fill", "Immediate action: Placed on Today's Active Focus Queue.", true)
-            case .good, .notYet:
-                return ("calendar", "Scheduled execution: Scheduled for execution in Upcoming Horizon.", false)
+            } else {
+                let intervalDays = draft.repeatUnit.days(count: draft.repeatCount)
+                let timeStr = draft.repeatUnit.displayString(count: draft.repeatCount).lowercased()
+                return ("calendar", "Scheduled execution: Due in \(draft.repeatCount) \(timeStr) (\(intervalDays)d) in Upcoming Horizon.", false)
             }
         }
 
@@ -50,8 +58,11 @@ public struct TaskEditorView: View {
                 return ("checklist", "Daily routine: Assigned to Daily Baseline (\(draft.durationMinutes) min).", true)
             }
             return ("bolt.fill", "Due today: Active on Today's Focus Queue.", true)
-        case .notYet:
+        case .halfway:
             let daysLeft = max(1, intervalDays / 2)
+            return ("clock", "Halfway runway: Estimated due in ~\(daysLeft) days (Upcoming Horizon).", false)
+        case .notYet:
+            let daysLeft = max(1, Int(round(Double(intervalDays) * 0.75)))
             return ("clock", "In progress: Estimated due in ~\(daysLeft) days (Upcoming Horizon).", false)
         case .good:
             return ("checkmark.circle", "Cycle fresh: Next due in \(intervalDays) days (Upcoming Horizon).", false)
@@ -209,10 +220,10 @@ public struct TaskEditorView: View {
                     }
                 }
 
-                // 3. Recurrence Cadence
+                // 3. Cadence Type Selection (Recurring vs One-Time)
                 VStack(alignment: .leading, spacing: 8 * s) {
                     HStack {
-                        Text("RECURRENCE CADENCE")
+                        Text(draft.isOneTime ? "TASK TIMING (ONE-TIME)" : "RECURRENCE CADENCE")
                             .font(.system(size: 10 * s, weight: .bold))
                             .tracking(1.4 * s)
                             .foregroundColor(AppConfig.Colors.subtextGrey)
@@ -221,10 +232,17 @@ public struct TaskEditorView: View {
 
                         HStack(spacing: 2 * s) {
                             CadenceTypeTab(title: "RECURRING", isSelected: !draft.isOneTime, s: s) {
-                                store.taskDraft?.isOneTime = false
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                    store.taskDraft?.isOneTime = false
+                                    if store.taskDraft?.initialHealthState == .overdue {
+                                        store.taskDraft?.initialHealthState = .due
+                                    }
+                                }
                             }
                             CadenceTypeTab(title: "ONE-TIME", isSelected: draft.isOneTime, s: s) {
-                                store.taskDraft?.isOneTime = true
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                    store.taskDraft?.isOneTime = true
+                                }
                             }
                         }
                         .padding(2 * s)
@@ -233,6 +251,7 @@ public struct TaskEditorView: View {
                     }
 
                     if !draft.isOneTime {
+                        // RECURRING CADENCE STEPPERS
                         HStack(spacing: 10 * s) {
                             HStack(spacing: 0) {
                                 Button(action: {
@@ -349,77 +368,182 @@ public struct TaskEditorView: View {
                             .padding(.top, 4 * s)
                         }
                     } else {
-                        HStack(spacing: 6 * s) {
-                            Image(systemName: "pin.fill")
-                                .font(.system(size: 10 * s))
-                                .foregroundColor(AppConfig.Colors.subtextGrey)
-                            Text("Task will execute once without recurring horizon intervals.")
-                                .font(.system(size: 11 * s, weight: .medium))
-                                .foregroundColor(AppConfig.Colors.subtextGrey)
-                        }
-                        .padding(.horizontal, 12 * s)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: 42 * s)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 7 * s))
-                        .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.12), lineWidth: 1 * s))
-                    }
-                }
+                        // ONE-TIME TIMING SELECTOR
+                        VStack(alignment: .leading, spacing: 8 * s) {
+                            HStack {
+                                Text("TARGET DEADLINE")
+                                    .font(.system(size: 9.5 * s, weight: .bold))
+                                    .foregroundColor(AppConfig.Colors.subtextGrey)
 
-                // 4. Current Status & Runway Gauge
-                VStack(alignment: .leading, spacing: 8 * s) {
-                    Text("CURRENT OPERATIONAL STATUS")
-                        .font(.system(size: 10 * s, weight: .bold))
-                        .tracking(1.4 * s)
-                        .foregroundColor(AppConfig.Colors.subtextGrey)
+                                Spacer()
 
-                    HStack(spacing: 5 * s) {
-                        ForEach(TaskHealthState.allCases, id: \.self) { state in
-                            let isSelected = draft.initialHealthState == state
-                            Button(action: {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                    store.taskDraft?.initialHealthState = state
+                                HStack(spacing: 2 * s) {
+                                    if draft.initialHealthState == .overdue {
+                                        CadenceTypeTab(title: "OVERDUE", isSelected: true, s: s) {}
+                                    }
+
+                                    CadenceTypeTab(
+                                        title: "TODAY",
+                                        isSelected: draft.initialHealthState == .due,
+                                        s: s
+                                    ) {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                            store.taskDraft?.initialHealthState = .due
+                                        }
+                                    }
+
+                                    CadenceTypeTab(
+                                        title: "IN FUTURE",
+                                        isSelected: isOneTimeInFuture,
+                                        s: s
+                                    ) {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                            store.taskDraft?.initialHealthState = .good
+                                        }
+                                    }
                                 }
-                            }) {
-                                VStack(spacing: 2 * s) {
-                                    Text(state.rawValue)
-                                        .font(.system(size: 10 * s, weight: .black))
-                                        .tracking(0.5 * s)
-                                    Text(state.subtitle)
-                                        .font(.system(size: 7.5 * s, weight: .bold))
-                                        .opacity(isSelected ? 0.75 : 0.6)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 40 * s)
-                                .background(isSelected ? (state == .overdue ? Color.red : Color.black) : Color.white)
-                                .foregroundColor(isSelected ? .white : Color.black)
+                                .padding(2 * s)
+                                .background(Color.black.opacity(0.06))
                                 .clipShape(RoundedRectangle(cornerRadius: 6 * s))
-                                .overlay(RoundedRectangle(cornerRadius: 6 * s).strokeBorder(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1 * s))
                             }
-                            .buttonStyle(.plain)
+
+                            if isOneTimeInFuture {
+                                HStack(spacing: 10 * s) {
+                                    HStack(spacing: 0) {
+                                        Button(action: {
+                                            if let c = store.taskDraft?.repeatCount, c > 1 {
+                                                store.taskDraft?.repeatCount -= 1
+                                            }
+                                        }) {
+                                            Image(systemName: "minus")
+                                                .font(.system(size: 11 * s, weight: .bold))
+                                                .foregroundColor(.black)
+                                                .frame(width: 36 * s, height: 42 * s)
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(SubtlePressStyle())
+
+                                        Divider().frame(height: 20 * s)
+
+                                        Text("\(draft.repeatCount)")
+                                            .font(.system(size: 18 * s, weight: .black, design: .monospaced))
+                                            .frame(maxWidth: .infinity)
+
+                                        Divider().frame(height: 20 * s)
+
+                                        Button(action: {
+                                            store.taskDraft?.repeatCount += 1
+                                        }) {
+                                            Image(systemName: "plus")
+                                                .font(.system(size: 11 * s, weight: .bold))
+                                                .foregroundColor(.black)
+                                                .frame(width: 36 * s, height: 42 * s)
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(SubtlePressStyle())
+                                    }
+                                    .background(Color.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 7 * s))
+                                    .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
+
+                                    HStack(spacing: 0) {
+                                        Button(action: {
+                                            store.taskDraft?.repeatUnit = draft.repeatUnit.previous()
+                                        }) {
+                                            Image(systemName: "chevron.left")
+                                                .font(.system(size: 11 * s, weight: .bold))
+                                                .foregroundColor(.black)
+                                                .frame(width: 34 * s, height: 42 * s)
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(SubtlePressStyle())
+
+                                        Divider().frame(height: 20 * s)
+
+                                        Text(draft.repeatUnit.displayString(count: draft.repeatCount).uppercased())
+                                            .font(.system(size: 12 * s, weight: .bold))
+                                            .tracking(0.6 * s)
+                                            .frame(maxWidth: .infinity)
+
+                                        Divider().frame(height: 20 * s)
+
+                                        Button(action: {
+                                            store.taskDraft?.repeatUnit = draft.repeatUnit.next()
+                                        }) {
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 11 * s, weight: .bold))
+                                                .foregroundColor(.black)
+                                                .frame(width: 34 * s, height: 42 * s)
+                                                .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(SubtlePressStyle())
+                                    }
+                                    .background(Color.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 7 * s))
+                                    .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
+                                }
+                            }
                         }
                     }
-
-                    HealthRunwayGauge(state: draft.initialHealthState, s: s)
-
-                    HStack(alignment: .center, spacing: 8 * s) {
-                        Image(systemName: routingInfo.icon)
-                            .font(.system(size: 11 * s, weight: .bold))
-                            .foregroundColor(routingInfo.isImmediate ? (draft.initialHealthState == .overdue ? .red : Color.black) : AppConfig.Colors.subtextGrey)
-
-                        Text(routingInfo.text)
-                            .font(.system(size: 10.5 * s, weight: .medium))
-                            .foregroundColor(Color.black.opacity(0.85))
-                            .lineLimit(2)
-                    }
-                    .padding(.horizontal, 10 * s)
-                    .padding(.vertical, 8 * s)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.black.opacity(0.04))
-                    .clipShape(RoundedRectangle(cornerRadius: 6 * s))
                 }
 
-                // 5. Execution Dock
+                // 4. Status Runway Gauge (ONLY DISPLAYED FOR RECURRING TASKS)
+                if !draft.isOneTime {
+                    VStack(alignment: .leading, spacing: 8 * s) {
+                        Text("CURRENT OPERATIONAL STATUS")
+                            .font(.system(size: 10 * s, weight: .bold))
+                            .tracking(1.4 * s)
+                            .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                        HStack(spacing: 5 * s) {
+                            ForEach(TaskHealthState.allCases, id: \.self) { state in
+                                let isSelected = draft.initialHealthState == state
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                        store.taskDraft?.initialHealthState = state
+                                    }
+                                }) {
+                                    VStack(spacing: 2 * s) {
+                                        Text(state.rawValue)
+                                            .font(.system(size: 10 * s, weight: .black))
+                                            .tracking(0.5 * s)
+                                        Text(state.subtitle)
+                                            .font(.system(size: 7.5 * s, weight: .bold))
+                                            .opacity(isSelected ? 0.75 : 0.6)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 40 * s)
+                                    .background(isSelected ? (state == .overdue ? Color.red : Color.black) : Color.white)
+                                    .foregroundColor(isSelected ? .white : Color.black)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6 * s))
+                                    .overlay(RoundedRectangle(cornerRadius: 6 * s).strokeBorder(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1 * s))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        HealthRunwayGauge(state: draft.initialHealthState, s: s)
+                    }
+                }
+
+                // 5. Routing Indicator
+                HStack(alignment: .center, spacing: 8 * s) {
+                    Image(systemName: routingInfo.icon)
+                        .font(.system(size: 11 * s, weight: .bold))
+                        .foregroundColor(routingInfo.isImmediate ? (draft.initialHealthState == .overdue ? .red : Color.black) : AppConfig.Colors.subtextGrey)
+
+                    Text(routingInfo.text)
+                        .font(.system(size: 10.5 * s, weight: .medium))
+                        .foregroundColor(Color.black.opacity(0.85))
+                        .lineLimit(2)
+                }
+                .padding(.horizontal, 10 * s)
+                .padding(.vertical, 8 * s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.black.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 6 * s))
+
+                // 6. Execution Dock
                 VStack(spacing: 8 * s) {
                     Button(action: {
                         if isCreatingCustomTag { confirmCustomTag() }
@@ -483,7 +607,6 @@ public struct TaskEditorView: View {
 }
 
 // MARK: - Subcomponents
-
 public struct HealthRunwayGauge: View {
     public let state: TaskHealthState
     public let s: CGFloat
@@ -495,17 +618,19 @@ public struct HealthRunwayGauge: View {
 
     private var filledSegments: Int {
         switch state {
-        case .good:    return 4
-        case .notYet:  return 3
-        case .due:     return 1
-        case .overdue: return 0
+        case .good:    return 4 // 100%
+        case .notYet:  return 3 // 75%
+        case .halfway: return 2 // 50%
+        case .due:     return 1 // 25%
+        case .overdue: return 0 // 0%
         }
     }
 
     private var stateColor: Color {
         switch state {
         case .good:    return AppConfig.Colors.statusGreen
-        case .notYet:  return AppConfig.Colors.statusYellow
+        case .notYet:  return Color(red: 132/255, green: 204/255, blue: 22/255)
+        case .halfway: return AppConfig.Colors.statusYellow
         case .due:     return AppConfig.Colors.statusOrange
         case .overdue: return AppConfig.Colors.statusRed
         }
@@ -514,7 +639,8 @@ public struct HealthRunwayGauge: View {
     private var runwayLabel: String {
         switch state {
         case .good:    return "RUNWAY: 100% (HEALTHY BUFFER)"
-        case .notYet:  return "RUNWAY: 75% (MID-CYCLE RUNNING)"
+        case .notYet:  return "RUNWAY: 75% (MID-CYCLE BUFFER)"
+        case .halfway: return "RUNWAY: 50% (HALFWAY RUNWAY)"
         case .due:     return "RUNWAY: 25% (CYCLE EXHAUSTED)"
         case .overdue: return "RUNWAY: 0% (DECAY HAZARD)"
         }

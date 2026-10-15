@@ -1,7 +1,9 @@
+// Sources/Views/RightColumn/HistoryTimelineView.swift
 import SwiftUI
 
 public struct HistoryTimelineView: View {
     public var records: [HistoryRecord]
+    public var onExport: (() -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
     private static let dayDateFormatter: DateFormatter = {
@@ -16,8 +18,9 @@ public struct HistoryTimelineView: View {
         return df
     }()
 
-    public init(records: [HistoryRecord]) {
+    public init(records: [HistoryRecord], onExport: (() -> Void)? = nil) {
         self.records = records
+        self.onExport = onExport
     }
 
     private struct DayGroup: Identifiable {
@@ -57,6 +60,51 @@ public struct HistoryTimelineView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 18 * s) {
+            // ==========================================
+            // EXPORT DATA UTILITY BANNER
+            // ==========================================
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3 * s) {
+                    Text("DATA BACKUP & PORTABILITY")
+                        .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
+                        .tracking(1.1 * s)
+                        .foregroundColor(.black)
+
+                    Text("Export complete system state, tasks, and history to a JSON file.")
+                        .font(.system(size: 8.5 * s, weight: .bold))
+                        .foregroundColor(AppConfig.Colors.subtextGrey)
+                }
+
+                Spacer()
+
+                Button {
+                    onExport?()
+                } label: {
+                    HStack(spacing: 5 * s) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 11 * s, weight: .bold))
+                        Text("EXPORT JSON")
+                            .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
+                            .tracking(0.6 * s)
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 10 * s)
+                    .frame(height: 30 * s)
+                    .background(Color.white)
+                    .overlay(
+                        Rectangle()
+                            .strokeBorder(AppConfig.Colors.lineGrey, lineWidth: 1 * s)
+                    )
+                }
+                .buttonStyle(TactileButtonStyle())
+            }
+            .padding(10 * s)
+            .background(Color.white)
+            .border(AppConfig.Colors.lineGrey, width: 1 * s)
+
+            // ==========================================
+            // TIMELINE GROUPS
+            // ==========================================
             if groupedDays.isEmpty {
                 VStack(spacing: 8 * s) {
                     Text("NO RECORDED HISTORY")

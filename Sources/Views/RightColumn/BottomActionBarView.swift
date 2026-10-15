@@ -1,3 +1,4 @@
+// Sources/Views/RightColumn/BottomActionBarView.swift
 import SwiftUI
 
 public struct BottomActionBarView: View {
@@ -91,8 +92,11 @@ private struct RibbonActionButton: View {
     }
 }
 
-private struct TactileButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
+// MARK: - Reusable Public Tactile Button Style
+public struct TactileButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.6 : 1.0)
     }

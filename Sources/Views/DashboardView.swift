@@ -1,3 +1,4 @@
+// Sources/Views/DashboardView.swift
 import SwiftUI
 
 private struct LeftColumnAdaptiveLayout: Layout {
@@ -59,7 +60,11 @@ public struct DashboardView: View {
                         switch store.activeRightTab {
                         case .create:
                             VStack(spacing: 0) {
-                                PanelHeaderView(title: "TASK ENTRY DISPATCH", badgeText: "NEW OPERATION", badgeIcon: "plus.circle")
+                                PanelHeaderView(
+                                    title: "TASK ENTRY DISPATCH",
+                                    badgeText: "NEW OPERATION",
+                                    badgeIcon: "plus.circle"
+                                )
                                 ScrollView(.vertical) {
                                     TaskEditorView(store: store)
                                         .padding(.horizontal, 24 * scalar)
@@ -73,10 +78,14 @@ public struct DashboardView: View {
                         case .edit:
                             if let draft = store.taskDraft {
                                 VStack(spacing: 0) {
-                                    PanelHeaderView(title: "TASK MODIFICATION", badgeText: "EDIT OPERATION", badgeIcon: "pencil")
+                                    PanelHeaderView(
+                                        title: "TASK MODIFICATION",
+                                        badgeText: "EDIT OPERATION",
+                                        badgeIcon: "pencil"
+                                    )
                                     ScrollView(.vertical) {
                                         TaskEditorView(store: store)
-                                            .id(draft.id) // Enforces explicit state teardown and recreation per task
+                                            .id(draft.id)
                                             .padding(.horizontal, 24 * scalar)
                                             .padding(.top, 16 * scalar)
                                             .padding(.bottom, 24 * scalar)
@@ -88,7 +97,11 @@ public struct DashboardView: View {
 
                         case .status:
                             VStack(spacing: 0) {
-                                PanelHeaderView(title: "OPERATIONAL STATUS", badgeText: "OVERVIEW", badgeIcon: "gauge.with.needle")
+                                PanelHeaderView(
+                                    title: "OPERATIONAL STATUS",
+                                    badgeText: "OVERVIEW",
+                                    badgeIcon: "gauge.with.needle"
+                                )
                                 ScrollView(.vertical) {
                                     StatusView(store: store)
                                         .padding(.horizontal, 24 * scalar)
@@ -124,10 +137,13 @@ public struct DashboardView: View {
                                     badgeIcon: "clock.arrow.circlepath"
                                 )
                                 ScrollView(.vertical) {
-                                    HistoryTimelineView(records: store.state.historyRecords)
-                                        .padding(.horizontal, 24 * scalar)
-                                        .padding(.top, 12 * scalar)
-                                        .padding(.bottom, 24 * scalar)
+                                    HistoryTimelineView(
+                                        records: store.state.historyRecords,
+                                        onExport: { store.exportStateToDisk() }
+                                    )
+                                    .padding(.horizontal, 24 * scalar)
+                                    .padding(.top, 12 * scalar)
+                                    .padding(.bottom, 24 * scalar)
                                 }
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
