@@ -71,21 +71,23 @@ public struct DashboardView: View {
                     ZStack {
                         switch store.activeRightTab {
                         case .create:
-                            VStack(spacing: 0) {
-                                PanelHeaderView(
-                                    title: "TASK ENTRY DISPATCH",
-                                    badgeText: "NEW OPERATION",
-                                    badgeIcon: "plus.circle"
-                                )
-                                ScrollView(.vertical) {
-                                    TaskEditorView(store: store)
-                                        .padding(.horizontal, 24 * scalar)
-                                        .padding(.top, 16 * scalar)
-                                        .padding(.bottom, 24 * scalar)
+                            if store.taskDraft != nil {
+                                VStack(spacing: 0) {
+                                    PanelHeaderView(
+                                        title: "TASK ENTRY DISPATCH",
+                                        badgeText: "NEW OPERATION",
+                                        badgeIcon: "plus.circle"
+                                    )
+                                    ScrollView(.vertical) {
+                                        TaskEditorView(store: store)
+                                            .padding(.horizontal, 24 * scalar)
+                                            .padding(.top, 16 * scalar)
+                                            .padding(.bottom, 24 * scalar)
+                                    }
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
                             }
-                            .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
 
                         case .edit:
                             if let draft = store.taskDraft {

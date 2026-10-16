@@ -1,5 +1,17 @@
 import Foundation
 
+public struct TaskRoutingInfo: Equatable, Sendable {
+    public let icon: String
+    public let text: String
+    public let isImmediate: Bool
+
+    public init(icon: String, text: String, isImmediate: Bool) {
+        self.icon = icon
+        self.text = text
+        self.isImmediate = isImmediate
+    }
+}
+
 /// Centralized ephemeral form model for creating and modifying tasks.
 public struct TaskDraft: Identifiable, Equatable, Sendable {
     public let id: UUID
@@ -89,5 +101,43 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             isCompleted: task.isCompleted,
             lastCompletedAt: task.lastCompletedAt
         )
+    }
+
+    // MARK: - Presentation Telemetry Projections
+    public var isOneTimeInFuture: Bool {
+        isOneTime && initialHealthState != .due && initialHealthState != .overdue
+    }
+
+    public var routingInfo: TaskRoutingInfo {
+        if isOneTime {
+            if initialHealthState == .overdue {
+                return TaskRoutingInfo(icon: "exclamationmark.triangle.fill", text: "Overdue hazard: Assigned high priority on Active Focus.", isImmediate: true)
+            } else if initialHealthState == .due {
+                return TaskRoutingInfo(icon: "bolt.fill", text: "Immediate action: Placed on Today's Active Focus Queue.", isImmediate: true)
+            } else {
+                let intervalDays = repeatUnit.days(count: repeatCount)
+                let timeStr = repeatUnit.displayString(count: repeatCount).lowercased()
+                return TaskRoutingInfo(icon: "calendar", text: "Scheduled execution: Due in \(repeatCount) \(timeStr) (\(intervalDays)d) in Upcoming Horizon.", isImmediate: false)
+            }
+        }
+
+        let intervalDays = repeatUnit.days(count: repeatCount)
+        switch initialHealthState {
+        case .overdue:
+            return TaskRoutingInfo(icon: "exclamationmark.triangle.fill", text: "Overdue hazard: Assigned high priority on Active Focus.", isImmediate: true)
+        case .due:
+            if repeatUnit == .day && repeatCount == 1 {
+                return TaskRoutingInfo(icon: "checklist", text: "Daily routine: Assigned to Daily Baseline (\(durationMinutes) min).", isImmediate: true)
+            }
+            return TaskRoutingInfo(icon: "bolt.fill", text: "Due today: Active on Today's Focus Queue.", isImmediate: true)
+        case .halfway:
+            let daysLeft = max(1, intervalDays / 2)
+            return TaskRoutingInfo(icon: "clock", text: "Halfway runway: Estimated due in ~\(daysLeft) days (Upcoming Horizon).", isImmediate: false)
+        case .notYet:
+            let daysLeft = max(1, Int(round(Double(intervalDays) * 0.75)))
+            return TaskRoutingInfo(icon: "clock", text: "In progress: Estimated due in ~\(daysLeft) days (Upcoming Horizon).", isImmediate: false)
+        case .good:
+            return TaskRoutingInfo(icon: "checkmark.circle", text: "Cycle fresh: Next due in \(intervalDays) days (Upcoming Horizon).", isImmediate: false)
+        }
     }
 }
