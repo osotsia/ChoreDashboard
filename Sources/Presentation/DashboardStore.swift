@@ -123,7 +123,9 @@ public final class DashboardStore {
             repeatCount: 1,
             repeatUnit: .week,
             targetDueDate: clock.now,
-            initialHealthState: .due
+            initialHealthState: .due,
+            isCompleted: false,
+            lastCompletedAt: nil
         )
         selectRightTab(.create)
     }
@@ -164,9 +166,9 @@ public final class DashboardStore {
             title: cleanTitle,
             tag: cleanTag,
             durationMinutes: draft.durationMinutes,
-            isCompleted: false,
+            isCompleted: draft.isCompleted,
             dueDate: resolvedDueDate,
-            lastCompletedAt: nil,
+            lastCompletedAt: draft.lastCompletedAt,
             recurrence: recurrence
         )
 
@@ -210,7 +212,14 @@ public final class DashboardStore {
     @discardableResult
     public func reloadFromDisk() -> Task<Void, Never> {
         Task {
-            if let reloaded = try? await persistenceClient.evaluateExternalChange() {
+            let reloaded: DashboardState?
+            if let external = try? await persistenceClient.evaluateExternalChange() {
+                reloaded = external
+            } else {
+                reloaded = try? await persistenceClient.load()
+            }
+
+            if let reloaded = reloaded {
                 self.persistTask?.cancel()
                 self.state = reloaded
                 self.rolloverRecurringTasksIfNeeded()

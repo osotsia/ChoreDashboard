@@ -9,19 +9,29 @@ public enum ChoreEngine {
         let calendar = clock.calendar
         let now = clock.now
         var didMutate = false
+        var indicesToRemove: [Int] = []
 
         for i in state.tasks.indices {
-            guard let recurrence = state.tasks[i].recurrence else { continue }
             guard state.tasks[i].isCompleted, let completedAt = state.tasks[i].lastCompletedAt else { continue }
 
             if !calendar.isDate(completedAt, inSameDayAs: now) {
-                state.tasks[i].isCompleted = false
-                if !state.tasks[i].isDailyBaseline {
-                    let intervalDays = recurrence.intervalDays
-                    state.tasks[i].dueDate = calendar.date(byAdding: .day, value: intervalDays, to: completedAt) ?? state.tasks[i].dueDate
+                if state.tasks[i].isOneTime {
+                    // Purge completed one-time tasks once their completion date has passed
+                    indicesToRemove.append(i)
+                    didMutate = true
+                } else if let recurrence = state.tasks[i].recurrence {
+                    state.tasks[i].isCompleted = false
+                    if !state.tasks[i].isDailyBaseline {
+                        let intervalDays = recurrence.intervalDays
+                        state.tasks[i].dueDate = calendar.date(byAdding: .day, value: intervalDays, to: completedAt) ?? state.tasks[i].dueDate
+                    }
+                    didMutate = true
                 }
-                didMutate = true
             }
+        }
+
+        for idx in indicesToRemove.reversed() {
+            state.tasks.remove(at: idx)
         }
 
         return didMutate

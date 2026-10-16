@@ -126,6 +126,7 @@ public enum ChoreProjections {
         let currentDay = calendar.component(.day, from: now)
         let timeElapsedRatio = min(1.0, Double(currentDay) / Double(totalDays))
 
+        // Maintenance quota calculates target pace for non-routine maintenance operations
         var maintenanceQuota: Double = 0
         for task in state.tasks where !task.isDailyBaseline {
             if let recurrence = task.recurrence {
@@ -166,17 +167,17 @@ public enum ChoreProjections {
     }
 
     public static func availableTags(for state: DashboardState) -> [String] {
-    var tags = Set<String>()
-    for tag in state.customTags { tags.insert(tag) }
-    for task in state.tasks { tags.insert(task.tag) }
-    for record in state.historyRecords { tags.insert(record.tag) }
+        var tags = Set<String>()
+        for tag in state.customTags { tags.insert(tag) }
+        for task in state.tasks { tags.insert(task.tag) }
+        for record in state.historyRecords { tags.insert(record.tag) }
 
-    let clean = tags
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
-        .filter { !$0.isEmpty }
-        .sorted()
+        let clean = tags
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .filter { !$0.isEmpty }
+            .sorted()
 
-    let defaultFallback = ["BATHROOM", "GENERAL", "KITCHEN", "SELF"]
-    return clean.isEmpty ? defaultFallback : clean
-}
+        let defaultFallback = ["BATHROOM", "GENERAL", "KITCHEN", "SELF"]
+        return clean.isEmpty ? defaultFallback : clean
+    }
 }

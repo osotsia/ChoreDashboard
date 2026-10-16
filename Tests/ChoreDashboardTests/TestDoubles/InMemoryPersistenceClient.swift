@@ -25,7 +25,11 @@ public actor InMemoryPersistenceClient: PersistenceClient {
     }
 
     public func load() async throws -> DashboardState? {
-        storedState
+        if let change = stagedExternalChange {
+            stagedExternalChange = nil
+            storedState = change
+        }
+        return storedState
     }
 
     public func evaluateExternalChange() async throws -> DashboardState? {
