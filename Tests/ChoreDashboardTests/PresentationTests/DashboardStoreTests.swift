@@ -261,6 +261,41 @@ struct DashboardStoreTests {
         #expect(decoded == store.state)
     }
 
+    @Test("importState decodes state from URL, resets draft, and schedules persist")
+    func testImportState() throws {
+        let (store, _, _) = makeStore()
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("import-test-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        var targetState = DashboardState()
+        targetState.tasks.append(TaskItem(title: "Imported Task", tag: "TEST"))
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(targetState)
+        try data.write(to: tempURL)
+
+        try store.importState(from: tempURL)
+
+        #expect(store.state.tasks.count == 1)
+        #expect(store.state.tasks[0].title == "Imported Task")
+        #expect(store.taskDraft == nil)
+    }
+
+    @Test("clearAllData wipes all operational records and dismisses active draft")
+    func testStoreClearAllData() {
+        let taskId = UUID()
+        let task = TaskItem(id: taskId, title: "Task", tag: "GENERAL")
+        let (store, _, _) = makeStore(tasks: [task])
+        store.startEditing(task: task)
+
+        store.clearAllData()
+
+        #expect(store.state.tasks.isEmpty)
+        #expect(store.state.historyRecords.isEmpty)
+        #expect(store.taskDraft == nil)
+    }
+
     @Test("Persistence throw does not crash store or corrupt in-memory state")
     func testPersistenceFailureDoesNotCorruptStoreState() async {
         let (store, mockStorage, _) = makeStore()

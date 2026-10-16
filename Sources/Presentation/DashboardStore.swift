@@ -231,7 +231,7 @@ public final class DashboardStore {
         }
     }
 
-    // MARK: - Data Export
+    // MARK: - Data Management & Portability
     public func exportState(to targetURL: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -257,6 +257,62 @@ public final class DashboardStore {
             } catch {
                 print("[DashboardStore] Export failed: \(error)")
             }
+        }
+    }
+
+    public func importState(from sourceURL: URL) throws {
+        let data = try Data(contentsOf: sourceURL)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let imported = try decoder.decode(DashboardState.self, from: data)
+
+        persistTask?.cancel()
+        state = imported
+        taskDraft = nil
+        rolloverRecurringTasksIfNeeded()
+        persistAsync()
+    }
+
+    @MainActor
+    public func importStateFromDisk() {
+        let panel = NSOpenPanel()
+        panel.title = "Load Chore Dashboard State"
+        panel.prompt = "Load"
+        panel.allowedContentTypes = [UTType.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        if panel.runModal() == .OK, let targetURL = panel.url {
+            do {
+                try importState(from: targetURL)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Failed to Load File"
+                alert.informativeText = "The selected file is not a valid Chore Dashboard state JSON: \(error.localizedDescription)"
+                alert.alertStyle = .warning
+                alert.runModal()
+            }
+        }
+    }
+
+    public func clearAllData() {
+        ChoreEngine.clearAllData(state: &state, clock: clock)
+        dismissDraft()
+        persistAsync()
+    }
+
+    @MainActor
+    public func clearAllDataWithConfirmation() {
+        let alert = NSAlert()
+        alert.messageText = "Clear All Operational Data?"
+        alert.informativeText = "This action will permanently delete all tasks, history records, and custom tags. This cannot be undone."
+        alert.alertStyle = .critical
+        alert.addButton(withTitle: "Clear All Data")
+        alert.addButton(withTitle: "Cancel")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            clearAllData()
         }
     }
 

@@ -118,6 +118,14 @@ public enum ChoreEngine {
         state.tasks.removeAll(where: { $0.id == id })
     }
 
+    /// Clears all tasks, history records, and custom tags, resetting the operational baseline.
+    public static func clearAllData(state: inout DashboardState, clock: Clock) {
+        state.tasks.removeAll()
+        state.historyRecords.removeAll()
+        state.customTags.removeAll()
+        state.trackingStartDate = clock.now
+    }
+
     /// Validates whether a tag string contains valid formatting and characters.
     public static func isValidTag(_ tag: String) -> Bool {
         let clean = tag.trimmingCharacters(in: .whitespacesAndNewlines)

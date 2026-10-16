@@ -219,6 +219,21 @@ struct ChoreEngineTests {
         #expect(state.tasks[0].id == id2)
     }
 
+    @Test("clearAllData purges all tasks, history records, and custom tags while resetting trackingStartDate")
+    func testClearAllData() {
+        let clock = makeClock()
+        let task = TaskItem(title: "Task", tag: "GENERAL")
+        let record = HistoryRecord(title: "Record", tag: "GENERAL")
+        var state = DashboardState(tasks: [task], historyRecords: [record], customTags: ["GENERAL", "CUSTOM"])
+
+        ChoreEngine.clearAllData(state: &state, clock: clock)
+
+        #expect(state.tasks.isEmpty)
+        #expect(state.historyRecords.isEmpty)
+        #expect(state.customTags.isEmpty)
+        #expect(state.trackingStartDate == clock.now)
+    }
+
     // MARK: - Tag Management & Deduplication
 
     @Test("isValidTag evaluates formatting rules and rejects punctuation characters")

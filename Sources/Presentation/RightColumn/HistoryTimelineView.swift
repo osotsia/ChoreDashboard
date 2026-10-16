@@ -4,6 +4,8 @@ import SwiftUI
 public struct HistoryTimelineView: View {
     public var records: [HistoryRecord]
     public var onExport: (() -> Void)? = nil
+    public var onLoad: (() -> Void)? = nil
+    public var onClear: (() -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
     private static let dayDateFormatter: DateFormatter = {
@@ -18,9 +20,16 @@ public struct HistoryTimelineView: View {
         return df
     }()
 
-    public init(records: [HistoryRecord], onExport: (() -> Void)? = nil) {
+    public init(
+        records: [HistoryRecord],
+        onExport: (() -> Void)? = nil,
+        onLoad: (() -> Void)? = nil,
+        onClear: (() -> Void)? = nil
+    ) {
         self.records = records
         self.onExport = onExport
+        self.onLoad = onLoad
+        self.onClear = onClear
     }
 
     private struct DayGroup: Identifiable {
@@ -61,42 +70,87 @@ public struct HistoryTimelineView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 18 * s) {
             // ==========================================
-            // EXPORT DATA UTILITY BANNER
+            // DATA MANAGEMENT UTILITY BANNER
             // ==========================================
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 3 * s) {
-                    Text("DATA BACKUP & PORTABILITY")
+            VStack(alignment: .leading, spacing: 8 * s) {
+                VStack(alignment: .leading, spacing: 2 * s) {
+                    Text("DATA ARCHIVE & RECOVERY")
                         .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
                         .tracking(1.1 * s)
                         .foregroundColor(.black)
 
-                    Text("Export complete system state, tasks, and history to a JSON file.")
+                    Text("Export state to JSON, restore previous archives, or clear system.")
                         .font(.system(size: 8.5 * s, weight: .bold))
                         .foregroundColor(AppConfig.Colors.subtextGrey)
                 }
 
-                Spacer()
-
-                Button {
-                    onExport?()
-                } label: {
-                    HStack(spacing: 5 * s) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 11 * s, weight: .bold))
-                        Text("EXPORT JSON")
-                            .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
-                            .tracking(0.6 * s)
+                HStack(spacing: 6 * s) {
+                    // Export JSON
+                    Button {
+                        onExport?()
+                    } label: {
+                        HStack(spacing: 4 * s) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 10 * s, weight: .bold))
+                            Text("EXPORT")
+                                .font(.system(size: 9 * s, weight: .black, design: .monospaced))
+                                .tracking(0.5 * s)
+                        }
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28 * s)
+                        .background(Color.white)
+                        .overlay(
+                            Rectangle()
+                                .strokeBorder(AppConfig.Colors.lineGrey, lineWidth: 1 * s)
+                        )
                     }
-                    .foregroundColor(.black)
-                    .padding(.horizontal, 10 * s)
-                    .frame(height: 30 * s)
-                    .background(Color.white)
-                    .overlay(
-                        Rectangle()
-                            .strokeBorder(AppConfig.Colors.lineGrey, lineWidth: 1 * s)
-                    )
+                    .buttonStyle(TactileButtonStyle())
+
+                    // Load JSON
+                    Button {
+                        onLoad?()
+                    } label: {
+                        HStack(spacing: 4 * s) {
+                            Image(systemName: "square.and.arrow.down")
+                                .font(.system(size: 10 * s, weight: .bold))
+                            Text("LOAD")
+                                .font(.system(size: 9 * s, weight: .black, design: .monospaced))
+                                .tracking(0.5 * s)
+                        }
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28 * s)
+                        .background(Color.white)
+                        .overlay(
+                            Rectangle()
+                                .strokeBorder(AppConfig.Colors.lineGrey, lineWidth: 1 * s)
+                        )
+                    }
+                    .buttonStyle(TactileButtonStyle())
+
+                    // Clear All Data
+                    Button {
+                        onClear?()
+                    } label: {
+                        HStack(spacing: 4 * s) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10 * s, weight: .bold))
+                            Text("CLEAR ALL")
+                                .font(.system(size: 9 * s, weight: .black, design: .monospaced))
+                                .tracking(0.5 * s)
+                        }
+                        .foregroundColor(AppConfig.Colors.statusRed)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 28 * s)
+                        .background(Color.white)
+                        .overlay(
+                            Rectangle()
+                                .strokeBorder(AppConfig.Colors.lineGrey, lineWidth: 1 * s)
+                        )
+                    }
+                    .buttonStyle(TactileButtonStyle())
                 }
-                .buttonStyle(TactileButtonStyle())
             }
             .padding(10 * s)
             .background(Color.white)

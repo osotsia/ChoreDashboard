@@ -153,7 +153,9 @@ public struct DashboardView: View {
                                 ScrollView(.vertical) {
                                     HistoryTimelineView(
                                         records: store.state.historyRecords,
-                                        onExport: { store.exportStateToDisk() }
+                                        onExport: { store.exportStateToDisk() },
+                                        onLoad: { store.importStateFromDisk() },
+                                        onClear: { store.clearAllDataWithConfirmation() }
                                     )
                                     .padding(.horizontal, 24 * scalar)
                                     .padding(.top, 12 * scalar)
