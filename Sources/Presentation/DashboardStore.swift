@@ -35,7 +35,10 @@ public final class DashboardStore {
         } else if let loaded = FilePersistenceClient.loadInitialBlocking(from: storageURL) {
             self.state = loaded
         } else {
-            let fallback = PreviewData.defaultState
+            var fallback = PreviewData.defaultState
+            if fallback.trackingStartDate == nil {
+                fallback.trackingStartDate = clock.now
+            }
             self.state = fallback
             Task { try? await resolvedClient.save(fallback) }
         }
@@ -90,6 +93,7 @@ public final class DashboardStore {
     public var sortedUpcomingEvents: [TaskItem] { ChoreProjections.sortedUpcomingEvents(for: state, clock: clock) }
     public var todaySnapshot: TodayOperationalSnapshot { ChoreProjections.todaySnapshot(for: state, clock: clock) }
     public var monthlyPacing: MonthlyPacingSnapshot { ChoreProjections.monthlyPacing(for: state, clock: clock) }
+    public var baselineCompliance: BaselineComplianceSnapshot { ChoreProjections.baselineCompliance(for: state, clock: clock) }
     public var availableTags: [String] { ChoreProjections.availableTags(for: state) }
 
     // MARK: - Navigation Control

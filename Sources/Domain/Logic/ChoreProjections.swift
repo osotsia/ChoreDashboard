@@ -27,6 +27,62 @@ public struct MonthlyPacingSnapshot: Sendable, Equatable {
     public let actualProgressRatio: Double
     public let expectedProgressRatio: Double
     public let isLeading: Bool
+    public let isOnPace: Bool
+
+    public init(
+        monthTitle: String,
+        currentDay: Int,
+        totalDaysInMonth: Int,
+        actualCompleted: Int,
+        totalMonthlyQuota: Int,
+        deltaLead: Int,
+        actualProgressRatio: Double,
+        expectedProgressRatio: Double,
+        isLeading: Bool,
+        isOnPace: Bool = false
+    ) {
+        self.monthTitle = monthTitle
+        self.currentDay = currentDay
+        self.totalDaysInMonth = totalDaysInMonth
+        self.actualCompleted = actualCompleted
+        self.totalMonthlyQuota = totalMonthlyQuota
+        self.deltaLead = deltaLead
+        self.actualProgressRatio = actualProgressRatio
+        self.expectedProgressRatio = expectedProgressRatio
+        self.isLeading = isLeading
+        self.isOnPace = isOnPace
+    }
+}
+
+public struct BaselineComplianceSnapshot: Sendable, Equatable {
+    public let completedCount: Int
+    public let expectedCount: Int
+    public let complianceRatio: Double
+    public let compliancePercentage: Int
+    public let activeDaysTracked: Int
+    public let totalBaselineTasks: Int
+    public let isNominal: Bool
+    public let statusBadgeText: String
+
+    public init(
+        completedCount: Int,
+        expectedCount: Int,
+        complianceRatio: Double,
+        compliancePercentage: Int,
+        activeDaysTracked: Int,
+        totalBaselineTasks: Int,
+        isNominal: Bool,
+        statusBadgeText: String = "NOMINAL"
+    ) {
+        self.completedCount = completedCount
+        self.expectedCount = expectedCount
+        self.complianceRatio = complianceRatio
+        self.compliancePercentage = compliancePercentage
+        self.activeDaysTracked = activeDaysTracked
+        self.totalBaselineTasks = totalBaselineTasks
+        self.isNominal = isNominal
+        self.statusBadgeText = statusBadgeText
+    }
 }
 
 // MARK: - Pure Projections Engine
@@ -112,6 +168,18 @@ public enum ChoreProjections {
         )
     }
 
+    /// Evaluates whether a history record corresponds to a daily baseline task.
+    public static func isBaselineRecord(_ record: HistoryRecord, in state: DashboardState) -> Bool {
+        if record.isDailyBaseline { return true }
+        if let taskId = record.taskId, let task = state.tasks.first(where: { $0.id == taskId }) {
+            return task.isDailyBaseline
+        }
+        if state.tasks.contains(where: { $0.isDailyBaseline && $0.title == record.title }) {
+            return true
+        }
+        return false
+    }
+
     public static func monthlyPacing(for state: DashboardState, clock: Clock) -> MonthlyPacingSnapshot {
         let calendar = clock.calendar
         let now = clock.now
@@ -124,34 +192,86 @@ public enum ChoreProjections {
 
         let totalDays = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
         let currentDay = calendar.component(.day, from: now)
-        let timeElapsedRatio = min(1.0, Double(currentDay) / Double(totalDays))
+
+        // Mid-month installation adjustment
+        let startDay: Int
+        if let explicit = state.trackingStartDate,
+           calendar.isDate(explicit, equalTo: now, toGranularity: .month),
+           calendar.isDate(explicit, equalTo: now, toGranularity: .year) {
+            startDay = min(currentDay, max(1, calendar.component(.day, from: explicit)))
+        } else {
+            startDay = 1
+        }
+
+        let activeDaysElapsed = max(1, currentDay - startDay + 1)
+        let totalActiveDaysInMonth = max(1, totalDays - startDay + 1)
+        let completedDays = max(0, activeDaysElapsed - 1)
 
         // Maintenance quota calculates target pace for non-routine maintenance operations
-        var maintenanceQuota: Double = 0
+        var fullMonthMaintenanceQuota: Double = 0
         for task in state.tasks where !task.isDailyBaseline {
             if let recurrence = task.recurrence {
                 let intervalDays = max(1, recurrence.intervalDays)
                 let runsPerMonth = Double(totalDays) / Double(intervalDays)
-                maintenanceQuota += runsPerMonth
+                fullMonthMaintenanceQuota += runsPerMonth
             } else {
-                maintenanceQuota += 1
+                fullMonthMaintenanceQuota += 1
             }
         }
 
-        if maintenanceQuota == 0 {
-            maintenanceQuota = Double(max(1, baselineTasks(for: state).count * totalDays))
+        if fullMonthMaintenanceQuota == 0 {
+            fullMonthMaintenanceQuota = Double(max(1, baselineTasks(for: state).count * totalDays))
         }
 
-        let totalMonthlyQuota = max(1, Int(round(maintenanceQuota)))
+        let activeRatio = Double(totalActiveDaysInMonth) / Double(totalDays)
+        let totalMonthlyQuota = max(1, Int(round(fullMonthMaintenanceQuota * activeRatio)))
 
+        // Numerator strictly isolates non-routine maintenance records
         let completionsThisMonth = state.historyRecords.filter { record in
             calendar.isDate(record.completedAt, equalTo: now, toGranularity: .month) &&
-            calendar.isDate(record.completedAt, equalTo: now, toGranularity: .year)
+            calendar.isDate(record.completedAt, equalTo: now, toGranularity: .year) &&
+            !isBaselineRecord(record, in: state)
         }.count
 
-        let expected = Double(totalMonthlyQuota) * timeElapsedRatio
-        let delta = completionsThisMonth - Int(round(expected))
+        // Dual-Threshold Window:
+        // 1. Quota required through end of yesterday (closed days):
+        let expectedPrior = Double(totalMonthlyQuota) * (Double(completedDays) / Double(totalActiveDaysInMonth))
+        // 2. Quota required through end of today:
+        let expectedToday = Double(totalMonthlyQuota) * (Double(activeDaysElapsed) / Double(totalActiveDaysInMonth))
+
+        let targetPriorInt = Int(floor(expectedPrior))
+        let targetTodayInt = Int(ceil(expectedToday))
+
+        let deltaLead: Int
+        let isOnPace: Bool
+        let isLeading: Bool
+
+        if completionsThisMonth >= targetTodayInt {
+            let computedLead = completionsThisMonth - Int(round(expectedToday))
+            if computedLead > 0 {
+                deltaLead = computedLead
+                isOnPace = false
+                isLeading = true
+            } else {
+                // Reached today's ceiling target at the rounding boundary without positive excess
+                deltaLead = 0
+                isOnPace = true
+                isLeading = true
+            }
+        } else if completionsThisMonth >= targetPriorInt {
+            // Closed-day requirements met; currently active within today's operational window
+            deltaLead = 0
+            isOnPace = true
+            isLeading = true
+        } else {
+            // Deficit behind closed days
+            deltaLead = completionsThisMonth - Int(round(expectedPrior))
+            isOnPace = false
+            isLeading = false
+        }
+
         let actualRatio = min(1.0, Double(completionsThisMonth) / Double(totalMonthlyQuota))
+        let timeElapsedRatio = min(1.0, Double(activeDaysElapsed) / Double(totalActiveDaysInMonth))
 
         return MonthlyPacingSnapshot(
             monthTitle: monthTitle,
@@ -159,10 +279,103 @@ public enum ChoreProjections {
             totalDaysInMonth: totalDays,
             actualCompleted: completionsThisMonth,
             totalMonthlyQuota: totalMonthlyQuota,
-            deltaLead: delta,
+            deltaLead: deltaLead,
             actualProgressRatio: actualRatio,
             expectedProgressRatio: timeElapsedRatio,
-            isLeading: delta >= 0
+            isLeading: isLeading,
+            isOnPace: isOnPace
+        )
+    }
+
+    /// Evaluates daily baseline routine compliance over active tracking days without pre-billing in-progress hours.
+    public static func baselineCompliance(for state: DashboardState, clock: Clock) -> BaselineComplianceSnapshot {
+        let calendar = clock.calendar
+        let now = clock.now
+
+        let baselineList = baselineTasks(for: state)
+        let bTotal = baselineList.count
+
+        guard bTotal > 0 else {
+            return BaselineComplianceSnapshot(
+                completedCount: 0,
+                expectedCount: 0,
+                complianceRatio: 1.0,
+                compliancePercentage: 100,
+                activeDaysTracked: 0,
+                totalBaselineTasks: 0,
+                isNominal: true,
+                statusBadgeText: "NOMINAL"
+            )
+        }
+
+        let currentDay = calendar.component(.day, from: now)
+
+        let startDay: Int
+        if let explicit = state.trackingStartDate,
+           calendar.isDate(explicit, equalTo: now, toGranularity: .month),
+           calendar.isDate(explicit, equalTo: now, toGranularity: .year) {
+            startDay = min(currentDay, max(1, calendar.component(.day, from: explicit)))
+        } else {
+            let monthRecords = state.historyRecords.filter { record in
+                calendar.isDate(record.completedAt, equalTo: now, toGranularity: .month) &&
+                calendar.isDate(record.completedAt, equalTo: now, toGranularity: .year)
+            }
+            if let earliest = monthRecords.map(\.completedAt).min() {
+                startDay = min(currentDay, max(1, calendar.component(.day, from: earliest)))
+            } else {
+                startDay = currentDay
+            }
+        }
+
+        let activeDays = max(1, currentDay - startDay + 1)
+        let completedDays = max(0, activeDays - 1)
+
+        let monthBaselineRecords = state.historyRecords.filter { record in
+            calendar.isDate(record.completedAt, equalTo: now, toGranularity: .month) &&
+            calendar.isDate(record.completedAt, equalTo: now, toGranularity: .year) &&
+            isBaselineRecord(record, in: state)
+        }
+
+        let completedToday = monthBaselineRecords.filter {
+            calendar.isDate($0.completedAt, inSameDayAs: now)
+        }.count
+
+        let totalCompleted = monthBaselineRecords.count
+
+        // Closed days require full baseline quota; in-progress today adds only what has been completed
+        let expectedCount: Int
+        if completedDays == 0 {
+            expectedCount = bTotal
+        } else {
+            let closedExpected = bTotal * completedDays
+            expectedCount = closedExpected + max(0, min(bTotal, completedToday))
+        }
+
+        let ratio = expectedCount > 0 ? Double(totalCompleted) / Double(expectedCount) : 1.0
+        let percentage = Int(round(min(1.0, ratio) * 100))
+
+        let statusText: String
+        let isNominal: Bool
+        if ratio >= 0.80 {
+            statusText = "NOMINAL"
+            isNominal = true
+        } else if ratio >= 0.70 {
+            statusText = "ON TRACK"
+            isNominal = true
+        } else {
+            statusText = "ATTENTION"
+            isNominal = false
+        }
+
+        return BaselineComplianceSnapshot(
+            completedCount: totalCompleted,
+            expectedCount: expectedCount,
+            complianceRatio: ratio,
+            compliancePercentage: percentage,
+            activeDaysTracked: activeDays,
+            totalBaselineTasks: bTotal,
+            isNominal: isNominal,
+            statusBadgeText: statusText
         )
     }
 

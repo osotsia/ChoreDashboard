@@ -8,6 +8,7 @@ public struct DashboardState: Codable, Sendable, Equatable {
     public var tasks: [TaskItem]
     public var historyRecords: [HistoryRecord]
     public var customTags: [String]
+    public var trackingStartDate: Date?
     
     // UI Metadata & Rules
     public var focusOverline: String
@@ -22,6 +23,7 @@ public struct DashboardState: Codable, Sendable, Equatable {
         tasks: [TaskItem] = [],
         historyRecords: [HistoryRecord] = [],
         customTags: [String] = [],
+        trackingStartDate: Date? = nil,
         focusOverline: String = "SCHEDULED OPERATIONS",
         focusTitle: String = "Main Tasks",
         focusSubtitle: String = "Targeted deep maintenance · Non-routine upkeep",
@@ -33,6 +35,7 @@ public struct DashboardState: Codable, Sendable, Equatable {
         self.tasks = tasks
         self.historyRecords = historyRecords
         self.customTags = customTags
+        self.trackingStartDate = trackingStartDate
         self.focusOverline = focusOverline
         self.focusTitle = focusTitle
         self.focusSubtitle = focusSubtitle

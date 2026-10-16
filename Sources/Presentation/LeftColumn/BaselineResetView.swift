@@ -27,7 +27,7 @@ public struct BaselineResetView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("CONTINUOUS BASELINE")
+                Text("ROUTINE OPERATIONS")
                     .font(.system(size: 11 * s, weight: .bold))
                     .tracking(2.0 * s)
                 Spacer()
@@ -47,8 +47,7 @@ public struct BaselineResetView: View {
                 .font(.system(size: 24 * s, weight: .bold))
                 .padding(.bottom, 4 * s)
 
-            // Dynamically computed duration estimate replaces the stale static string
-            Text("Est: \(store.baselineTotalMinutes) min · Daily maintenance")
+            Text("Est: \(store.baselineTotalMinutes) min · 24-hour cycle")
                 .font(.system(size: 13 * s, weight: .regular))
                 .foregroundColor(.white.opacity(0.8))
                 .padding(.bottom, 14 * s)

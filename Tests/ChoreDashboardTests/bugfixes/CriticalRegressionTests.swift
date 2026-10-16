@@ -47,7 +47,6 @@ struct CriticalRegressionTests {
         ChoreEngine.rollover(state: &state, clock: clockDay2)
 
         // System Invariant: Tasks retained in inventory must belong to at least one operational queue.
-        // Completed one-time tasks must be purged on rollover (matching completeHorizonTask behavior).
         let inFocus = ChoreProjections.focusQueue(for: state, clock: clockDay2).contains(where: { $0.id == oneTimeTaskId })
         let inHorizon = ChoreProjections.upcomingEvents(for: state, clock: clockDay2).contains(where: { $0.id == oneTimeTaskId })
         let inBaseline = ChoreProjections.baselineTasks(for: state).contains(where: { $0.id == oneTimeTaskId })
@@ -92,7 +91,6 @@ struct CriticalRegressionTests {
             enableSystemIntegration: false
         )
 
-        // User edits the task title to fix a typo
         store.startEditing(task: completedTask)
         store.taskDraft?.title = "Deep Clean Oven & Range"
         store.commitDraft()
@@ -117,12 +115,12 @@ struct CriticalRegressionTests {
             TaskItem(title: "Weekly Air Filter", tag: "GENERAL", recurrence: RecurrenceRule(count: 1, unit: .week)),
             TaskItem(title: "Biweekly Scrub", tag: "BATHROOM", recurrence: RecurrenceRule(count: 2, unit: .week)),
             TaskItem(title: "Monthly Deep Fridge", tag: "KITCHEN", recurrence: RecurrenceRule(count: 1, unit: .month)),
-            // Daily baselines must not pollute the monthly maintenance quota denominator
+            // Daily baselines must not pollute the monthly maintenance quota denominator or numerator
             TaskItem(title: "Morning Stretch", tag: "SELF", recurrence: RecurrenceRule(count: 1, unit: .day)),
             TaskItem(title: "Wipe Counters", tag: "KITCHEN", recurrence: RecurrenceRule(count: 1, unit: .day))
         ]
 
-        // 12 completions logged since Day 10
+        // 12 completions logged since Day 10 (6 maintenance, 6 baseline)
         var history: [HistoryRecord] = []
         for day in 10...15 {
             var comps = DateComponents()
@@ -132,18 +130,23 @@ struct CriticalRegressionTests {
             comps.hour = 11
             let date = cal.date(from: comps)!
 
-            history.append(HistoryRecord(title: "Weekly Air Filter", tag: "GENERAL", completedAt: date))
-            history.append(HistoryRecord(title: "Wipe Counters", tag: "KITCHEN", completedAt: date))
+            history.append(HistoryRecord(title: "Weekly Air Filter", tag: "GENERAL", completedAt: date, isDailyBaseline: false))
+            history.append(HistoryRecord(title: "Wipe Counters", tag: "KITCHEN", completedAt: date, isDailyBaseline: true))
         }
 
         let state = DashboardState(tasks: tasks, historyRecords: history)
         let pacing = ChoreProjections.monthlyPacing(for: state, clock: clockDay15)
 
         // Quota is based on maintenance tasks (8), Day 15 target pace is ~4.
-        // With 12 actual completions, the velocity gauge correctly reflects a positive lead.
+        // With 6 maintenance completions (excluding daily baseline), the velocity gauge reflects a positive lead (+2).
         #expect(pacing.totalMonthlyQuota == 8)
-        #expect(pacing.actualCompleted == 12)
-        #expect(pacing.deltaLead > 0)
+        #expect(pacing.actualCompleted == 6)
+        #expect(pacing.deltaLead == 2)
         #expect(pacing.isLeading == true)
+
+        let compliance = ChoreProjections.baselineCompliance(for: state, clock: clockDay15)
+        #expect(compliance.completedCount == 6)
+        #expect(compliance.compliancePercentage >= 50)
+        #expect(compliance.isNominal == false)
     }
 }

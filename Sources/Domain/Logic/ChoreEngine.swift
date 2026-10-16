@@ -49,7 +49,8 @@ public enum ChoreEngine {
                 taskId: task.id,
                 title: task.title,
                 tag: task.tag,
-                completedAt: clock.now
+                completedAt: clock.now,
+                isDailyBaseline: task.isDailyBaseline
             )
             state.historyRecords.insert(record, at: 0)
         } else {
@@ -68,7 +69,8 @@ public enum ChoreEngine {
             taskId: task.id,
             title: task.title,
             tag: task.tag,
-            completedAt: clock.now
+            completedAt: clock.now,
+            isDailyBaseline: task.isDailyBaseline
         )
         state.historyRecords.insert(record, at: 0)
 

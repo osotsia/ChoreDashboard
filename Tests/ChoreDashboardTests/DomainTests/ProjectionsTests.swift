@@ -172,6 +172,7 @@ struct ProjectionsTests {
         #expect(deficitPacing.actualCompleted == 1)
         #expect(deficitPacing.deltaLead < 0)
         #expect(deficitPacing.isLeading == false)
+        #expect(deficitPacing.isOnPace == false)
 
         var leadHistory: [HistoryRecord] = []
         for _ in 0..<6 {
@@ -183,6 +184,100 @@ struct ProjectionsTests {
         #expect(leadPacing.actualCompleted == 6)
         #expect(leadPacing.deltaLead > 0)
         #expect(leadPacing.isLeading == true)
+        #expect(leadPacing.isOnPace == false)
+    }
+
+    @Test("monthlyPacing identifies ON PACE state across closed-day boundary and ceiling transitions")
+    func testMonthlyPacingOnPaceWindow() {
+        let clock = makeClock(year: 2026, month: 10, day: 16) // Day 16 of 31
+
+        // Use standard PreviewData inventory which produces a 33-task monthly maintenance quota
+        let tasks = PreviewData.defaultState.tasks
+
+        // 1. Exactly at closed-day expectation (16 completions, expectedPrior floor = 15)
+        var history16: [HistoryRecord] = []
+        for _ in 0..<16 {
+            history16.append(HistoryRecord(title: "M", tag: "GENERAL", completedAt: clock.now, isDailyBaseline: false))
+        }
+
+        let state16 = DashboardState(tasks: tasks, historyRecords: history16)
+        let pacing16 = ChoreProjections.monthlyPacing(for: state16, clock: clock)
+
+        #expect(pacing16.actualCompleted == 16)
+        #expect(pacing16.totalMonthlyQuota == 33)
+        #expect(pacing16.isOnPace == true)
+        #expect(pacing16.isLeading == true)
+        #expect(pacing16.deltaLead == 0)
+
+        // 2. Incremented by 1 completion (17 completions: meets targetTodayInt ceiling without flipping to deficit)
+        var history17 = history16
+        history17.append(HistoryRecord(title: "M", tag: "GENERAL", completedAt: clock.now, isDailyBaseline: false))
+
+        let state17 = DashboardState(tasks: tasks, historyRecords: history17)
+        let pacing17 = ChoreProjections.monthlyPacing(for: state17, clock: clock)
+
+        #expect(pacing17.actualCompleted == 17)
+        #expect(pacing17.isOnPace == true)
+        #expect(pacing17.isLeading == true)
+        #expect(pacing17.deltaLead == 0)
+    }
+
+    @Test("monthlyPacing strictly excludes daily baseline history records from maintenance completions")
+    func testMonthlyPacingExcludesDailyBaselines() {
+        let clock = makeClock(year: 2026, month: 5, day: 10)
+        let maintenance = TaskItem(title: "Filter", tag: "GENERAL", recurrence: RecurrenceRule(count: 1, unit: .week))
+        let baseline = TaskItem(title: "Meditation", tag: "SELF", recurrence: RecurrenceRule(count: 1, unit: .day))
+
+        let maintenanceRecord = HistoryRecord(taskId: maintenance.id, title: "Filter", tag: "GENERAL", completedAt: clock.now, isDailyBaseline: false)
+        let baselineRecord = HistoryRecord(taskId: baseline.id, title: "Meditation", tag: "SELF", completedAt: clock.now, isDailyBaseline: true)
+
+        let state = DashboardState(tasks: [maintenance, baseline], historyRecords: [maintenanceRecord, baselineRecord])
+        let pacing = ChoreProjections.monthlyPacing(for: state, clock: clock)
+
+        #expect(pacing.actualCompleted == 1)
+    }
+
+    @Test("baselineCompliance evaluates adherence and accounts for mid-month install start date")
+    func testBaselineComplianceMidMonthInstall() {
+        let cal = makeCalendar()
+        let clock = makeClock(year: 2026, month: 5, day: 15) // Day 15 of 31
+
+        let b1 = TaskItem(title: "B1", tag: "SELF", recurrence: RecurrenceRule(count: 1, unit: .day))
+        let b2 = TaskItem(title: "B2", tag: "SELF", recurrence: RecurrenceRule(count: 1, unit: .day))
+
+        var startComps = DateComponents()
+        startComps.year = 2026
+        startComps.month = 5
+        startComps.day = 13
+        let installDate = cal.date(from: startComps)!
+
+        var history: [HistoryRecord] = []
+        for day in 13...15 {
+            var c = DateComponents()
+            c.year = 2026
+            c.month = 5
+            c.day = day
+            c.hour = 9
+            let date = cal.date(from: c)!
+            history.append(HistoryRecord(taskId: b1.id, title: "B1", tag: "SELF", completedAt: date, isDailyBaseline: true))
+            history.append(HistoryRecord(taskId: b2.id, title: "B2", tag: "SELF", completedAt: date, isDailyBaseline: true))
+        }
+
+        let state = DashboardState(
+            tasks: [b1, b2],
+            historyRecords: history,
+            trackingStartDate: installDate
+        )
+
+        let compliance = ChoreProjections.baselineCompliance(for: state, clock: clock)
+
+        #expect(compliance.activeDaysTracked == 3)
+        #expect(compliance.totalBaselineTasks == 2)
+        #expect(compliance.expectedCount == 6)
+        #expect(compliance.completedCount == 6)
+        #expect(compliance.compliancePercentage == 100)
+        #expect(compliance.isNominal == true)
+        #expect(compliance.statusBadgeText == "NOMINAL")
     }
 
     @Test("monthlyPacing calculates non-zero quota and zero completions cleanly when task inventory is empty")

@@ -97,30 +97,37 @@ public struct StatusView: View {
             }
 
             // ==========================================
-            // BLOCK 2: MONTHLY OPERATIONAL VELOCITY (DUAL-BAR PACING)
+            // BLOCK 2: MONTHLY MAINTENANCE VELOCITY (DUAL-BAR PACING)
             // ==========================================
             let pacing = store.monthlyPacing
             VStack(alignment: .leading, spacing: 8 * s) {
                 HStack {
-                    SectionBadge(text: "MONTHLY VELOCITY · \(pacing.monthTitle)")
+                    SectionBadge(text: "MONTHLY MAINTENANCE VELOCITY · \(pacing.monthTitle)")
                         .foregroundColor(.black)
 
                     Spacer()
 
                     HStack(spacing: 3 * s) {
-                        if pacing.deltaLead >= 0 {
+                        if pacing.deltaLead > 0 {
                             Image(systemName: "arrow.up.right")
                                 .font(.system(size: 8 * s, weight: .black))
                             Text("+\(pacing.deltaLead) LEAD (AHEAD)")
                                 .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
+                                .foregroundColor(AppConfig.Colors.statusGreen)
+                        } else if pacing.isLeading || pacing.isOnPace {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 8 * s, weight: .black))
+                            Text("ON PACE")
+                                .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
+                                .foregroundColor(AppConfig.Colors.statusGreen)
                         } else {
                             Image(systemName: "arrow.down.right")
                                 .font(.system(size: 8 * s, weight: .black))
                             Text("\(pacing.deltaLead) DEFICIT (LAGGING)")
                                 .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
+                                .foregroundColor(AppConfig.Colors.statusOrange)
                         }
                     }
-                    .foregroundColor(pacing.deltaLead >= 0 ? AppConfig.Colors.statusGreen : AppConfig.Colors.statusOrange)
                 }
                 .padding(.vertical, 4 * s)
                 .padding(.horizontal, 8 * s)
@@ -131,7 +138,7 @@ public struct StatusView: View {
                     // Top Telemetry Split
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2 * s) {
-                            Text("COMPLETED THIS MONTH")
+                            Text("MAINTENANCE TASKS DONE")
                                 .font(.system(size: 8 * s, weight: .bold))
                                 .foregroundColor(AppConfig.Colors.subtextGrey)
 
@@ -168,32 +175,27 @@ public struct StatusView: View {
 
                             HStack(spacing: 0) {
                                 if actualRatio >= expectedRatio {
-                                    // Base quota pace achieved
                                     Rectangle()
                                         .fill(Color.black)
                                         .frame(width: totalW * CGFloat(expectedRatio))
 
-                                    // Lead excess over baseline (VIBRANT EMERALD GREEN)
                                     Rectangle()
                                         .fill(AppConfig.Colors.statusGreen)
                                         .frame(width: totalW * CGFloat(actualRatio - expectedRatio))
 
-                                    // Unfilled track
                                     Rectangle()
                                         .fill(Color.black.opacity(0.06))
                                         .frame(width: max(0, totalW * CGFloat(1.0 - actualRatio)))
                                 } else {
-                                    // Actual completions achieved
                                     Rectangle()
                                         .fill(Color.black)
                                         .frame(width: totalW * CGFloat(actualRatio))
 
-                                    // Deficit gap behind baseline pace
+                                    // Display neutral buffer if on pace or leading, orange only if lagging behind closed days
                                     Rectangle()
-                                        .fill(AppConfig.Colors.statusOrange.opacity(0.35))
+                                        .fill(pacing.isLeading ? Color.black.opacity(0.18) : AppConfig.Colors.statusOrange.opacity(0.35))
                                         .frame(width: totalW * CGFloat(expectedRatio - actualRatio))
 
-                                    // Unfilled track
                                     Rectangle()
                                         .fill(Color.black.opacity(0.06))
                                         .frame(width: max(0, totalW * CGFloat(1.0 - expectedRatio)))
@@ -227,13 +229,13 @@ public struct StatusView: View {
                     HStack {
                         HStack(spacing: 4 * s) {
                             Rectangle()
-                                .fill(pacing.deltaLead >= 0 ? AppConfig.Colors.statusGreen : Color.black)
+                                .fill(pacing.isLeading ? AppConfig.Colors.statusGreen : Color.black)
                                 .frame(width: 8 * s, height: 8 * s)
                                 .clipShape(RoundedRectangle(cornerRadius: 1.5 * s))
 
-                            Text(pacing.deltaLead >= 0 ? "LEAD: +\(pacing.deltaLead) EXCESS" : "ACTUAL: \(Int(pacing.actualProgressRatio * 100))%")
+                            Text(pacing.deltaLead > 0 ? "LEAD: +\(pacing.deltaLead) EXCESS" : (pacing.isLeading ? "ON PACE: \(Int(pacing.actualProgressRatio * 100))%" : "DEFICIT: \(pacing.deltaLead) TASKS"))
                                 .font(.system(size: 8 * s, weight: .bold, design: .monospaced))
-                                .foregroundColor(pacing.deltaLead >= 0 ? AppConfig.Colors.statusGreen : AppConfig.Colors.subtextGrey)
+                                .foregroundColor(pacing.isLeading ? AppConfig.Colors.statusGreen : AppConfig.Colors.subtextGrey)
                         }
 
                         Spacer()
@@ -256,7 +258,101 @@ public struct StatusView: View {
             }
 
             // ==========================================
-            // BLOCK 3: HORIZON QUEUE · NEXT 5 UP
+            // BLOCK 3: DAILY BASELINE COMPLIANCE (ROUTINE ADHERENCE)
+            // ==========================================
+            let compliance = store.baselineCompliance
+            VStack(alignment: .leading, spacing: 8 * s) {
+                HStack {
+                    SectionBadge(text: "DAILY BASELINE COMPLIANCE · \(compliance.activeDaysTracked)D ACTIVE")
+                        .foregroundColor(.black)
+
+                    Spacer()
+
+                    HStack(spacing: 3 * s) {
+                        Image(systemName: compliance.isNominal ? "checkmark.shield.fill" : (compliance.complianceRatio >= 0.70 ? "checkmark.shield" : "exclamationmark.shield.fill"))
+                            .font(.system(size: 8 * s, weight: .black))
+                        Text("\(compliance.compliancePercentage)% \(compliance.statusBadgeText)")
+                            .font(.system(size: 9.5 * s, weight: .black, design: .monospaced))
+                    }
+                    .foregroundColor(compliance.complianceRatio >= 0.70 ? AppConfig.Colors.statusGreen : AppConfig.Colors.statusOrange)
+                }
+                .padding(.vertical, 4 * s)
+                .padding(.horizontal, 8 * s)
+                .background(AppConfig.Colors.headerGrey.opacity(0.35))
+                .border(AppConfig.Colors.lineGrey, width: 1 * s)
+
+                VStack(alignment: .leading, spacing: 8 * s) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2 * s) {
+                            Text("ROUTINE ADHERENCE")
+                                .font(.system(size: 8 * s, weight: .bold))
+                                .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                            HStack(alignment: .firstTextBaseline, spacing: 4 * s) {
+                                Text("\(compliance.completedCount)")
+                                    .font(.system(size: 19 * s, weight: .black, design: .monospaced))
+                                    .foregroundColor(.black)
+                                Text("/ \(compliance.expectedCount) EXECUTIONS")
+                                    .font(.system(size: 9.5 * s, weight: .bold))
+                                    .foregroundColor(AppConfig.Colors.subtextGrey)
+                            }
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 2 * s) {
+                            Text("DAILY TARGET")
+                                .font(.system(size: 8 * s, weight: .bold))
+                                .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                            Text("\(compliance.totalBaselineTasks) TASKS / DAY")
+                                .font(.system(size: 9.5 * s, weight: .bold, design: .monospaced))
+                                .foregroundColor(.black)
+                        }
+                    }
+
+                    // Compliance Progress Bar
+                    GeometryReader { geo in
+                        let totalW = geo.size.width
+                        let ratio = max(0.0, min(1.0, compliance.complianceRatio))
+                        let barColor: Color = compliance.complianceRatio >= 0.70
+                            ? AppConfig.Colors.statusGreen
+                            : (compliance.complianceRatio >= 0.50 ? AppConfig.Colors.statusYellow : AppConfig.Colors.statusOrange)
+
+                        HStack(spacing: 0) {
+                            Rectangle()
+                                .fill(barColor)
+                                .frame(width: totalW * CGFloat(ratio))
+
+                            Rectangle()
+                                .fill(Color.black.opacity(0.06))
+                                .frame(width: max(0, totalW * CGFloat(1.0 - ratio)))
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 3 * s))
+                    }
+                    .frame(height: 8 * s)
+                    .padding(.vertical, 2 * s)
+
+                    // Subtext Breakdown
+                    HStack {
+                        Text("TARGET: ≥80% CONSISTENCY")
+                            .font(.system(size: 8 * s, weight: .bold, design: .monospaced))
+                            .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                        Spacer()
+
+                        Text("TRACKED OVER \(compliance.activeDaysTracked) \(compliance.activeDaysTracked == 1 ? "DAY" : "DAYS")")
+                            .font(.system(size: 8 * s, weight: .bold, design: .monospaced))
+                            .foregroundColor(AppConfig.Colors.subtextGrey)
+                    }
+                }
+                .padding(10 * s)
+                .background(Color.white)
+                .border(AppConfig.Colors.lineGrey, width: 1 * s)
+            }
+
+            // ==========================================
+            // BLOCK 4: HORIZON QUEUE · NEXT 5 UP
             // ==========================================
             VStack(alignment: .leading, spacing: 8 * s) {
                 HStack {

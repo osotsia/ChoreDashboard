@@ -310,52 +310,53 @@ public enum PreviewData {
             ],
             historyRecords: [
                 // Oct 15 (0 days ago)
-                HistoryRecord(taskId: prepKombucha1Id, title: "Prep kombucha 1/2", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 0, hour: 9, minute: 20)),
+                HistoryRecord(taskId: prepKombucha1Id, title: "Prep kombucha 1/2", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 0, hour: 9, minute: 20), isDailyBaseline: false),
 
                 // Oct 14 (1 day ago)
-                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 1, hour: 18, minute: 31)),
-                HistoryRecord(taskId: dustSurfacesId, title: "Dust surfaces", tag: "GENERAL", completedAt: relativeDate(daysAgo: 1, hour: 16, minute: 53)),
-                HistoryRecord(taskId: waterFlowersId, title: "Water flowers", tag: "GENERAL", completedAt: relativeDate(daysAgo: 1, hour: 16, minute: 37)),
-                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 1, hour: 15, minute: 57)),
+                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 1, hour: 18, minute: 31), isDailyBaseline: true),
+                HistoryRecord(taskId: dustSurfacesId, title: "Dust surfaces", tag: "GENERAL", completedAt: relativeDate(daysAgo: 1, hour: 16, minute: 53), isDailyBaseline: false),
+                HistoryRecord(taskId: waterFlowersId, title: "Water flowers", tag: "GENERAL", completedAt: relativeDate(daysAgo: 1, hour: 16, minute: 37), isDailyBaseline: false),
+                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 1, hour: 15, minute: 57), isDailyBaseline: true),
 
                 // Oct 13 (2 days ago)
-                HistoryRecord(taskId: deepCountersId, title: "Deep clean counters", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 2, hour: 14, minute: 12)),
-                HistoryRecord(taskId: wipeCountersId, title: "Wipe counters", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 2, hour: 14, minute: 12)),
-                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 2, hour: 12, minute: 6)),
-                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 2, hour: 12, minute: 6)),
+                HistoryRecord(taskId: deepCountersId, title: "Deep clean counters", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 2, hour: 14, minute: 12), isDailyBaseline: false),
+                HistoryRecord(taskId: wipeCountersId, title: "Wipe counters", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 2, hour: 14, minute: 12), isDailyBaseline: true),
+                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 2, hour: 12, minute: 6), isDailyBaseline: true),
+                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 2, hour: 12, minute: 6), isDailyBaseline: true),
 
                 // Oct 12 (3 days ago)
-                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 3, hour: 13, minute: 52)),
-                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 3, hour: 13, minute: 38)),
-                HistoryRecord(taskId: showerWall2Id, title: "Shower wall 2/2", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 3, hour: 11, minute: 50)),
+                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 3, hour: 13, minute: 52), isDailyBaseline: true),
+                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 3, hour: 13, minute: 38), isDailyBaseline: true),
+                HistoryRecord(taskId: showerWall2Id, title: "Shower wall 2/2", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 3, hour: 11, minute: 50), isDailyBaseline: false),
 
                 // Oct 11 (4 days ago)
-                HistoryRecord(taskId: tidyFridgeId, title: "Tidy up fridge", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 4, hour: 20, minute: 10)),
-                HistoryRecord(taskId: bathroomTrashId, title: "Bathroom trash", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 4, hour: 20, minute: 5)),
-                HistoryRecord(taskId: cleanSinkId, title: "Clean sink", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 4, hour: 20, minute: 1)),
-                HistoryRecord(taskId: tidyRearrangeId, title: "Tidy up / rearrange stuff", tag: "GENERAL", completedAt: relativeDate(daysAgo: 4, hour: 19, minute: 41)),
-                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 4, hour: 17, minute: 36)),
-                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 4, hour: 17, minute: 18)),
-                HistoryRecord(taskId: showerWall1Id, title: "Shower wall 1/2", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 4, hour: 17, minute: 8)),
+                HistoryRecord(taskId: tidyFridgeId, title: "Tidy up fridge", tag: "KITCHEN", completedAt: relativeDate(daysAgo: 4, hour: 20, minute: 10), isDailyBaseline: false),
+                HistoryRecord(taskId: bathroomTrashId, title: "Bathroom trash", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 4, hour: 20, minute: 5), isDailyBaseline: false),
+                HistoryRecord(taskId: cleanSinkId, title: "Clean sink", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 4, hour: 20, minute: 1), isDailyBaseline: false),
+                HistoryRecord(taskId: tidyRearrangeId, title: "Tidy up / rearrange stuff", tag: "GENERAL", completedAt: relativeDate(daysAgo: 4, hour: 19, minute: 41), isDailyBaseline: false),
+                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 4, hour: 17, minute: 36), isDailyBaseline: true),
+                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 4, hour: 17, minute: 18), isDailyBaseline: true),
+                HistoryRecord(taskId: showerWall1Id, title: "Shower wall 1/2", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 4, hour: 17, minute: 8), isDailyBaseline: false),
 
                 // Oct 10 (5 days ago)
-                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 5, hour: 17, minute: 38)),
-                HistoryRecord(taskId: basicVacuumId, title: "Basic vacùùming", tag: "GENERAL", completedAt: relativeDate(daysAgo: 5, hour: 16, minute: 58)),
-                HistoryRecord(taskId: waterFlowersId, title: "Water flowers", tag: "GENERAL", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 27)),
-                HistoryRecord(taskId: tidyBoxesId, title: "Tidy up boxes", tag: "GENERAL", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 25)),
-                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 18)),
-                HistoryRecord(taskId: cleanToiletId, title: "Clean toilet", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 7)),
-                HistoryRecord(taskId: cleanBathtubId, title: "Clean bathtub", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 7))
+                HistoryRecord(taskId: meditationId, title: "13m meditation", tag: "SELF", completedAt: relativeDate(daysAgo: 5, hour: 17, minute: 38), isDailyBaseline: true),
+                HistoryRecord(taskId: basicVacuumId, title: "Basic vacùùming", tag: "GENERAL", completedAt: relativeDate(daysAgo: 5, hour: 16, minute: 58), isDailyBaseline: false),
+                HistoryRecord(taskId: waterFlowersId, title: "Water flowers", tag: "GENERAL", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 27), isDailyBaseline: false),
+                HistoryRecord(taskId: tidyBoxesId, title: "Tidy up boxes", tag: "GENERAL", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 25), isDailyBaseline: false),
+                HistoryRecord(taskId: stretchId, title: "Stretch (shoulders, inner thigh, hip flexor, squat)", tag: "SELF", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 18), isDailyBaseline: true),
+                HistoryRecord(taskId: cleanToiletId, title: "Clean toilet", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 7), isDailyBaseline: false),
+                HistoryRecord(taskId: cleanBathtubId, title: "Clean bathtub", tag: "BATHROOM", completedAt: relativeDate(daysAgo: 5, hour: 13, minute: 7), isDailyBaseline: false)
             ],
             customTags: [
                 "KITCHEN", "BATHROOM", "GENERAL", "SELF"
             ],
+            trackingStartDate: relativeDate(daysAgo: 5, hour: 0, minute: 0),
             focusOverline: "SCHEDULED OPERATIONS",
             focusTitle: "Main Tasks",
             focusSubtitle: "Targeted deep maintenance · Non-routine upkeep",
-            heroTools: "TOOLS: Sanitizer, microfiber kit, squeegee, scrubber.",
+            heroTools: "PREPARATION: Stage required supplies and workspace before starting major tasks.",
             baselineTitle: "Daily Baseline",
-            baselineRule: "RULE: Complete daily routines before noon."
+            baselineRule: "RULE: Complete before noon."
         )
     }()
 }
