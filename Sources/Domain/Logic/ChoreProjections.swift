@@ -126,19 +126,27 @@ public enum ChoreProjections {
         let currentDay = calendar.component(.day, from: now)
         let timeElapsedRatio = min(1.0, Double(currentDay) / Double(totalDays))
 
+        // Reconcile quota denominator with full tracked inventory scope (focus + baseline + active monthly one-time tasks)
         var maintenanceQuota: Double = 0
-        for task in state.tasks where !task.isDailyBaseline {
-            if let recurrence = task.recurrence {
+        for task in state.tasks {
+            if task.isDailyBaseline {
+                maintenanceQuota += Double(totalDays)
+            } else if let recurrence = task.recurrence {
                 let intervalDays = max(1, recurrence.intervalDays)
                 let runsPerMonth = Double(totalDays) / Double(intervalDays)
                 maintenanceQuota += runsPerMonth
             } else {
-                maintenanceQuota += 1
-            }
-        }
+                let isDueThisMonth = calendar.isDate(task.dueDate, equalTo: now, toGranularity: .month) &&
+                                     calendar.isDate(task.dueDate, equalTo: now, toGranularity: .year)
+                let isCompletedThisMonth = task.lastCompletedAt.map {
+                    calendar.isDate($0, equalTo: now, toGranularity: .month) &&
+                    calendar.isDate($0, equalTo: now, toGranularity: .year)
+                } ?? false
 
-        if maintenanceQuota == 0 {
-            maintenanceQuota = Double(max(1, baselineTasks(for: state).count * totalDays))
+                if isDueThisMonth || isCompletedThisMonth {
+                    maintenanceQuota += 1
+                }
+            }
         }
 
         let totalMonthlyQuota = max(1, Int(round(maintenanceQuota)))
@@ -166,17 +174,17 @@ public enum ChoreProjections {
     }
 
     public static func availableTags(for state: DashboardState) -> [String] {
-    var tags = Set<String>()
-    for tag in state.customTags { tags.insert(tag) }
-    for task in state.tasks { tags.insert(task.tag) }
-    for record in state.historyRecords { tags.insert(record.tag) }
+        var tags = Set<String>()
+        for tag in state.customTags { tags.insert(tag) }
+        for task in state.tasks { tags.insert(task.tag) }
+        for record in state.historyRecords { tags.insert(record.tag) }
 
-    let clean = tags
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
-        .filter { !$0.isEmpty }
-        .sorted()
+        let clean = tags
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .filter { !$0.isEmpty }
+            .sorted()
 
-    let defaultFallback = ["BATHROOM", "GENERAL", "KITCHEN", "SELF"]
-    return clean.isEmpty ? defaultFallback : clean
-}
+        let defaultFallback = ["BATHROOM", "GENERAL", "KITCHEN", "SELF"]
+        return clean.isEmpty ? defaultFallback : clean
+    }
 }

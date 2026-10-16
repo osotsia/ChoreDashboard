@@ -12,6 +12,8 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
     public var repeatUnit: CadenceUnit
     public var targetDueDate: Date
     public var initialHealthState: TaskHealthState
+    public var isCompleted: Bool
+    public var lastCompletedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -23,7 +25,9 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
         repeatCount: Int = 1,
         repeatUnit: CadenceUnit = .week,
         targetDueDate: Date = Date(),
-        initialHealthState: TaskHealthState = .due
+        initialHealthState: TaskHealthState = .due,
+        isCompleted: Bool = false,
+        lastCompletedAt: Date? = nil
     ) {
         self.id = id
         self.isNew = isNew
@@ -35,6 +39,8 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
         self.repeatUnit = repeatUnit
         self.targetDueDate = targetDueDate
         self.initialHealthState = initialHealthState
+        self.isCompleted = isCompleted
+        self.lastCompletedAt = lastCompletedAt
     }
 
     /// Converts an existing TaskItem into an editable draft using the injected Clock.
@@ -79,7 +85,9 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             repeatCount: repeatCount,
             repeatUnit: repeatUnit,
             targetDueDate: task.dueDate,
-            initialHealthState: task.healthState(using: clock)
+            initialHealthState: task.healthState(using: clock),
+            isCompleted: task.isCompleted,
+            lastCompletedAt: task.lastCompletedAt
         )
     }
 }

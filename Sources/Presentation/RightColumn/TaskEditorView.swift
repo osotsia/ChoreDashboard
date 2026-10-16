@@ -219,7 +219,7 @@ public struct TaskEditorView: View {
                     }
                 }
 
-                // 3. Cadence Type Selection
+                // 3. Cadence Type & Timing Selection
                 VStack(alignment: .leading, spacing: 8 * s) {
                     HStack {
                         Text(draft.isOneTime ? "TASK TIMING (ONE-TIME)" : "RECURRENCE CADENCE")
@@ -323,47 +323,6 @@ public struct TaskEditorView: View {
                             .background(Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: 7 * s))
                             .overlay(RoundedRectangle(cornerRadius: 7 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
-                        }
-
-                        if draft.repeatUnit == .day && draft.repeatCount == 1 {
-                            HStack {
-                                Text("DAILY DURATION")
-                                    .font(.system(size: 10 * s, weight: .bold))
-                                    .tracking(1.4 * s)
-                                    .foregroundColor(AppConfig.Colors.subtextGrey)
-
-                                Spacer()
-
-                                HStack(spacing: 0) {
-                                    Button(action: {
-                                        if let d = store.taskDraft?.durationMinutes, d > 5 {
-                                            store.taskDraft?.durationMinutes -= 5
-                                        }
-                                    }) {
-                                        Image(systemName: "minus")
-                                            .font(.system(size: 10 * s, weight: .bold))
-                                            .frame(width: 28 * s, height: 30 * s)
-                                    }
-                                    .buttonStyle(SubtlePressStyle())
-
-                                    Text("\(draft.durationMinutes) MIN")
-                                        .font(.system(size: 11 * s, weight: .bold, design: .monospaced))
-                                        .padding(.horizontal, 6 * s)
-
-                                    Button(action: {
-                                        store.taskDraft?.durationMinutes += 5
-                                    }) {
-                                        Image(systemName: "plus")
-                                            .font(.system(size: 10 * s, weight: .bold))
-                                            .frame(width: 28 * s, height: 30 * s)
-                                    }
-                                    .buttonStyle(SubtlePressStyle())
-                                }
-                                .background(Color.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 5 * s))
-                                .overlay(RoundedRectangle(cornerRadius: 5 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
-                            }
-                            .padding(.top, 4 * s)
                         }
                     } else {
                         VStack(alignment: .leading, spacing: 8 * s) {
@@ -482,6 +441,46 @@ public struct TaskEditorView: View {
                             }
                         }
                     }
+
+                    // Duration selector accessible across all task cadences
+                    HStack {
+                        Text("ESTIMATED DURATION")
+                            .font(.system(size: 10 * s, weight: .bold))
+                            .tracking(1.4 * s)
+                            .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                        Spacer()
+
+                        HStack(spacing: 0) {
+                            Button(action: {
+                                if let d = store.taskDraft?.durationMinutes, d > 5 {
+                                    store.taskDraft?.durationMinutes -= 5
+                                }
+                            }) {
+                                Image(systemName: "minus")
+                                    .font(.system(size: 10 * s, weight: .bold))
+                                    .frame(width: 28 * s, height: 30 * s)
+                            }
+                            .buttonStyle(SubtlePressStyle())
+
+                            Text("\(draft.durationMinutes) MIN")
+                                .font(.system(size: 11 * s, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 6 * s)
+
+                            Button(action: {
+                                store.taskDraft?.durationMinutes += 5
+                            }) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 10 * s, weight: .bold))
+                                    .frame(width: 28 * s, height: 30 * s)
+                            }
+                            .buttonStyle(SubtlePressStyle())
+                        }
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 5 * s))
+                        .overlay(RoundedRectangle(cornerRadius: 5 * s).strokeBorder(Color.black.opacity(0.15), lineWidth: 1 * s))
+                    }
+                    .padding(.top, 4 * s)
                 }
 
                 // 4. Status Runway Gauge

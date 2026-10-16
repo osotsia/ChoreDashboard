@@ -152,8 +152,8 @@ struct RolloverTests {
         #expect(state.tasks[0].dueDate == clockDay1.now)
     }
 
-    @Test("Rollover ignores uncompleted tasks and one-time tasks")
-    func testRolloverIgnoresUncompletedAndOneTime() {
+    @Test("Rollover ignores uncompleted tasks and purges completed one-time tasks")
+    func testRolloverIgnoresUncompletedAndPurgesCompletedOneTime() {
         let clockDay1 = makeClock(year: 2026, month: 5, day: 1)
         let uncompleted = TaskItem(title: "Undone", tag: "TEST", isCompleted: false, recurrence: RecurrenceRule(count: 1, unit: .week))
         let oneTimeDone = TaskItem(title: "OneTime", tag: "TEST", isCompleted: true, lastCompletedAt: clockDay1.now, recurrence: nil)
@@ -162,9 +162,10 @@ struct RolloverTests {
         let clockDay2 = makeClock(year: 2026, month: 5, day: 2)
         let mutated = ChoreEngine.rollover(state: &state, clock: clockDay2)
 
-        #expect(mutated == false)
+        #expect(mutated == true)
+        #expect(state.tasks.count == 1)
+        #expect(state.tasks[0].title == "Undone")
         #expect(state.tasks[0].isCompleted == false)
-        #expect(state.tasks[1].isCompleted == true)
     }
 
     @Test("Rollover handles multi-day calendar gap and uncompletes dormant tasks")
