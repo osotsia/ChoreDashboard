@@ -53,11 +53,9 @@ struct CriticalRegressionTests {
         let inBaseline = ChoreProjections.baselineTasks(for: state).contains(where: { $0.id == oneTimeTaskId })
         let isPresentInAnyQueue = inFocus || inHorizon || inBaseline
 
-        // Assertion 1: Task must not be orphaned in storage while invisible across all UI lists
         #expect(state.tasks.isEmpty || isPresentInAnyQueue,
                 "One-time task is permanently retained in state.tasks but excluded from focus, upcoming, and baseline projections.")
 
-        // Assertion 2: Total inventory counter must equal the sum of distinct operational queues
         let totalPartitionedCount = ChoreProjections.focusQueue(for: state, clock: clockDay2).count
             + ChoreProjections.upcomingEvents(for: state, clock: clockDay2).count
             + ChoreProjections.baselineTasks(for: state).count
@@ -101,7 +99,6 @@ struct CriticalRegressionTests {
 
         let updatedTask = store.state.tasks.first(where: { $0.id == taskId })
 
-        // Both assertions fail because commitDraft() hardcodes isCompleted = false and lastCompletedAt = nil
         #expect(updatedTask?.isCompleted == true,
                 "commitDraft() unconditionally set isCompleted to false on an already completed task.")
         #expect(updatedTask?.lastCompletedAt == completionTimestamp,
