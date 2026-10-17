@@ -1,6 +1,7 @@
 import Foundation
 
 // MARK: - Operational Telemetry Snapshots
+
 public struct TodayOperationalSnapshot: Sendable, Equatable {
     public let focusTotal: Int
     public let focusCompleted: Int
@@ -85,7 +86,155 @@ public struct BaselineComplianceSnapshot: Sendable, Equatable {
     }
 }
 
+// MARK: - Temporal Boundaries & Indexing Primitives
+
+/// Encapsulates monthly calendar boundaries, active tracking windows, and elapsed ratios.
+public struct ActiveMonthWindow: Sendable, Equatable {
+    public let referenceDate: Date
+    public let monthTitle: String
+    public let currentDay: Int
+    public let totalDaysInMonth: Int
+    public let startDay: Int
+    public let activeDaysElapsed: Int
+    public let totalActiveDays: Int
+    public let completedDays: Int
+    public let timeElapsedRatio: Double
+
+    public init(
+        now: Date,
+        trackingStartDate: Date?,
+        fallbackStartDay: Int = 1,
+        calendar: Calendar
+    ) {
+        self.referenceDate = now
+        self.currentDay = calendar.component(.day, from: now)
+        self.totalDaysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
+
+        self.monthTitle = Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone)
+            .month(.wide)
+            .format(now)
+            .uppercased()
+
+        if let explicit = trackingStartDate,
+           calendar.isDate(explicit, equalTo: now, toGranularity: .month),
+           calendar.isDate(explicit, equalTo: now, toGranularity: .year) {
+            self.startDay = min(currentDay, max(1, calendar.component(.day, from: explicit)))
+        } else {
+            self.startDay = min(currentDay, max(1, fallbackStartDay))
+        }
+
+        self.activeDaysElapsed = max(1, currentDay - startDay + 1)
+        self.totalActiveDays = max(1, totalDaysInMonth - startDay + 1)
+        self.completedDays = max(0, activeDaysElapsed - 1)
+        self.timeElapsedRatio = min(1.0, Double(activeDaysElapsed) / Double(totalActiveDays))
+    }
+}
+
+/// Provides O(1) set-based disambiguation between daily baseline routines and maintenance tasks.
+public struct TaskClassificationIndex: Sendable {
+    public let allTaskIds: Set<UUID>
+    public let baselineTaskIds: Set<UUID>
+    public let baselineTitles: Set<String>
+
+    public init(tasks: [TaskItem], historyRecords: [HistoryRecord] = []) {
+        var allIds = Set<UUID>()
+        var baseIds = Set<UUID>()
+        var titles = Set<String>()
+
+        for task in tasks {
+            allIds.insert(task.id)
+            if task.isDailyBaseline {
+                baseIds.insert(task.id)
+                titles.insert(task.title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
+            }
+        }
+
+        // Index historical records explicitly flagged as daily baseline so that
+        // deleting an active task never causes historical completions to drift into maintenance
+        for record in historyRecords where record.isDailyBaseline {
+            if let taskId = record.taskId {
+                baseIds.insert(taskId)
+            }
+            titles.insert(record.title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
+        }
+
+        self.allTaskIds = allIds
+        self.baselineTaskIds = baseIds
+        self.baselineTitles = titles
+    }
+
+    public func isBaselineRecord(_ record: HistoryRecord) -> Bool {
+        if record.isDailyBaseline { return true }
+        if let taskId = record.taskId {
+            if baselineTaskIds.contains(taskId) { return true }
+            if allTaskIds.contains(taskId) { return false }
+        }
+        let cleanTitle = record.title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return baselineTitles.contains(cleanTitle)
+    }
+}
+
+// MARK: - Dual-Threshold Pacing Engine
+
+public struct PacingResult: Sendable, Equatable {
+    public let deltaLead: Int
+    public let isOnPace: Bool
+    public let isLeading: Bool
+}
+
+public struct MaintenancePacingTargets: Sendable, Equatable {
+    public let totalMonthlyQuota: Int
+    public let expectedPrior: Double
+    public let expectedToday: Double
+}
+
+public enum PacingMath {
+    /// Evaluates operational pacing against yesterday's closed-day quota and today's active ceiling.
+    public static func evaluate(
+        actualCompletions: Int,
+        targets: MaintenancePacingTargets
+    ) -> PacingResult {
+        guard targets.totalMonthlyQuota > 0 else {
+            return PacingResult(deltaLead: 0, isOnPace: true, isLeading: true)
+        }
+
+        let targetPriorInt = Int(floor(targets.expectedPrior))
+        let targetTodayInt = Int(ceil(targets.expectedToday))
+
+        if actualCompletions >= targetTodayInt {
+            let lead = actualCompletions - Int(round(targets.expectedToday))
+            if lead > 0 {
+                return PacingResult(deltaLead: lead, isOnPace: false, isLeading: true)
+            } else {
+                return PacingResult(deltaLead: 0, isOnPace: true, isLeading: true)
+            }
+        } else if actualCompletions >= targetPriorInt {
+            return PacingResult(deltaLead: 0, isOnPace: true, isLeading: true)
+        } else {
+            let deficit = actualCompletions - Int(round(targets.expectedPrior))
+            return PacingResult(deltaLead: deficit, isOnPace: false, isLeading: false)
+        }
+    }
+
+    /// Convenience evaluator for direct scalar testing against a uniform active window.
+    public static func evaluate(
+        actualCompletions: Int,
+        quota: Int,
+        window: ActiveMonthWindow
+    ) -> PacingResult {
+        let expectedPrior = Double(quota) * (Double(window.completedDays) / Double(window.totalActiveDays))
+        let expectedToday = Double(quota) * (Double(window.activeDaysElapsed) / Double(window.totalActiveDays))
+        let targets = MaintenancePacingTargets(
+            totalMonthlyQuota: quota,
+            expectedPrior: expectedPrior,
+            expectedToday: expectedToday
+        )
+        return evaluate(actualCompletions: actualCompletions, targets: targets)
+    }
+}
+
 // MARK: - Pure Projections Engine
+
 public enum ChoreProjections {
 
     public static func baselineTasks(for state: DashboardState) -> [TaskItem] {
@@ -170,120 +319,54 @@ public enum ChoreProjections {
 
     /// Evaluates whether a history record corresponds to a daily baseline task.
     public static func isBaselineRecord(_ record: HistoryRecord, in state: DashboardState) -> Bool {
-        if record.isDailyBaseline { return true }
-        if let taskId = record.taskId, let task = state.tasks.first(where: { $0.id == taskId }) {
-            return task.isDailyBaseline
-        }
-        if state.tasks.contains(where: { $0.isDailyBaseline && $0.title == record.title }) {
-            return true
-        }
-        return false
+        TaskClassificationIndex(tasks: state.tasks, historyRecords: state.historyRecords).isBaselineRecord(record)
     }
 
+    /// Calculates target pace and lead/deficit metrics for non-routine maintenance operations.
     public static func monthlyPacing(for state: DashboardState, clock: Clock) -> MonthlyPacingSnapshot {
         let calendar = clock.calendar
         let now = clock.now
+        let window = ActiveMonthWindow(
+            now: now,
+            trackingStartDate: state.trackingStartDate,
+            fallbackStartDay: 1,
+            calendar: calendar
+        )
+        let index = TaskClassificationIndex(tasks: state.tasks, historyRecords: state.historyRecords)
 
-        let monthFormatter = DateFormatter()
-        monthFormatter.dateFormat = "LLLL"
-        monthFormatter.calendar = calendar
-        monthFormatter.timeZone = calendar.timeZone
-        let monthTitle = monthFormatter.string(from: now).uppercased()
-
-        let totalDays = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
-        let currentDay = calendar.component(.day, from: now)
-
-        // Mid-month installation adjustment
-        let startDay: Int
-        if let explicit = state.trackingStartDate,
-           calendar.isDate(explicit, equalTo: now, toGranularity: .month),
-           calendar.isDate(explicit, equalTo: now, toGranularity: .year) {
-            startDay = min(currentDay, max(1, calendar.component(.day, from: explicit)))
-        } else {
-            startDay = 1
-        }
-
-        let activeDaysElapsed = max(1, currentDay - startDay + 1)
-        let totalActiveDaysInMonth = max(1, totalDays - startDay + 1)
-        let completedDays = max(0, activeDaysElapsed - 1)
-
-        // Maintenance quota calculates target pace for non-routine maintenance operations
-        var fullMonthMaintenanceQuota: Double = 0
-        for task in state.tasks where !task.isDailyBaseline {
-            if let recurrence = task.recurrence {
-                let intervalDays = max(1, recurrence.intervalDays)
-                let runsPerMonth = Double(totalDays) / Double(intervalDays)
-                fullMonthMaintenanceQuota += runsPerMonth
-            } else {
-                fullMonthMaintenanceQuota += 1
-            }
-        }
-
-        if fullMonthMaintenanceQuota == 0 {
-            fullMonthMaintenanceQuota = Double(max(1, baselineTasks(for: state).count * totalDays))
-        }
-
-        let activeRatio = Double(totalActiveDaysInMonth) / Double(totalDays)
-        let totalMonthlyQuota = max(1, Int(round(fullMonthMaintenanceQuota * activeRatio)))
-
-        // Numerator strictly isolates non-routine maintenance records
         let completionsThisMonth = state.historyRecords.filter { record in
             calendar.isDate(record.completedAt, equalTo: now, toGranularity: .month) &&
             calendar.isDate(record.completedAt, equalTo: now, toGranularity: .year) &&
-            !isBaselineRecord(record, in: state)
+            !index.isBaselineRecord(record)
         }.count
 
-        // Dual-Threshold Window:
-        // 1. Quota required through end of yesterday (closed days):
-        let expectedPrior = Double(totalMonthlyQuota) * (Double(completedDays) / Double(totalActiveDaysInMonth))
-        // 2. Quota required through end of today:
-        let expectedToday = Double(totalMonthlyQuota) * (Double(activeDaysElapsed) / Double(totalActiveDaysInMonth))
+        let targets = calculateMaintenanceTargets(
+            tasks: state.tasks,
+            window: window,
+            calendar: calendar,
+            completionsThisMonth: completionsThisMonth
+        )
 
-        let targetPriorInt = Int(floor(expectedPrior))
-        let targetTodayInt = Int(ceil(expectedToday))
+        let pacing = PacingMath.evaluate(
+            actualCompletions: completionsThisMonth,
+            targets: targets
+        )
 
-        let deltaLead: Int
-        let isOnPace: Bool
-        let isLeading: Bool
-
-        if completionsThisMonth >= targetTodayInt {
-            let computedLead = completionsThisMonth - Int(round(expectedToday))
-            if computedLead > 0 {
-                deltaLead = computedLead
-                isOnPace = false
-                isLeading = true
-            } else {
-                // Reached today's ceiling target at the rounding boundary without positive excess
-                deltaLead = 0
-                isOnPace = true
-                isLeading = true
-            }
-        } else if completionsThisMonth >= targetPriorInt {
-            // Closed-day requirements met; currently active within today's operational window
-            deltaLead = 0
-            isOnPace = true
-            isLeading = true
-        } else {
-            // Deficit behind closed days
-            deltaLead = completionsThisMonth - Int(round(expectedPrior))
-            isOnPace = false
-            isLeading = false
-        }
-
-        let actualRatio = min(1.0, Double(completionsThisMonth) / Double(totalMonthlyQuota))
-        let timeElapsedRatio = min(1.0, Double(activeDaysElapsed) / Double(totalActiveDaysInMonth))
+        let actualRatio = targets.totalMonthlyQuota > 0
+            ? min(1.0, Double(completionsThisMonth) / Double(targets.totalMonthlyQuota))
+            : 0.0
 
         return MonthlyPacingSnapshot(
-            monthTitle: monthTitle,
-            currentDay: currentDay,
-            totalDaysInMonth: totalDays,
+            monthTitle: window.monthTitle,
+            currentDay: window.currentDay,
+            totalDaysInMonth: window.totalDaysInMonth,
             actualCompleted: completionsThisMonth,
-            totalMonthlyQuota: totalMonthlyQuota,
-            deltaLead: deltaLead,
+            totalMonthlyQuota: targets.totalMonthlyQuota,
+            deltaLead: pacing.deltaLead,
             actualProgressRatio: actualRatio,
-            expectedProgressRatio: timeElapsedRatio,
-            isLeading: isLeading,
-            isOnPace: isOnPace
+            expectedProgressRatio: window.timeElapsedRatio,
+            isLeading: pacing.isLeading,
+            isOnPace: pacing.isOnPace
         )
     }
 
@@ -308,33 +391,27 @@ public enum ChoreProjections {
             )
         }
 
-        let currentDay = calendar.component(.day, from: now)
-
-        let startDay: Int
-        if let explicit = state.trackingStartDate,
-           calendar.isDate(explicit, equalTo: now, toGranularity: .month),
-           calendar.isDate(explicit, equalTo: now, toGranularity: .year) {
-            startDay = min(currentDay, max(1, calendar.component(.day, from: explicit)))
-        } else {
-            let monthRecords = state.historyRecords.filter { record in
-                calendar.isDate(record.completedAt, equalTo: now, toGranularity: .month) &&
-                calendar.isDate(record.completedAt, equalTo: now, toGranularity: .year)
-            }
-            if let earliest = monthRecords.map(\.completedAt).min() {
-                startDay = min(currentDay, max(1, calendar.component(.day, from: earliest)))
-            } else {
-                startDay = currentDay
-            }
-        }
-
-        let activeDays = max(1, currentDay - startDay + 1)
-        let completedDays = max(0, activeDays - 1)
+        let index = TaskClassificationIndex(tasks: state.tasks, historyRecords: state.historyRecords)
 
         let monthBaselineRecords = state.historyRecords.filter { record in
             calendar.isDate(record.completedAt, equalTo: now, toGranularity: .month) &&
             calendar.isDate(record.completedAt, equalTo: now, toGranularity: .year) &&
-            isBaselineRecord(record, in: state)
+            index.isBaselineRecord(record)
         }
+
+        let fallbackDay: Int
+        if let earliest = monthBaselineRecords.map(\.completedAt).min() {
+            fallbackDay = calendar.component(.day, from: earliest)
+        } else {
+            fallbackDay = calendar.component(.day, from: now)
+        }
+
+        let window = ActiveMonthWindow(
+            now: now,
+            trackingStartDate: state.trackingStartDate,
+            fallbackStartDay: fallbackDay,
+            calendar: calendar
+        )
 
         let completedToday = monthBaselineRecords.filter {
             calendar.isDate($0.completedAt, inSameDayAs: now)
@@ -343,13 +420,16 @@ public enum ChoreProjections {
         let totalCompleted = monthBaselineRecords.count
 
         // Closed days require full baseline quota; in-progress today adds only what has been completed
-        let expectedCount: Int
-        if completedDays == 0 {
-            expectedCount = bTotal
+        let rawExpected: Int
+        if window.completedDays == 0 {
+            rawExpected = max(0, min(bTotal, completedToday))
         } else {
-            let closedExpected = bTotal * completedDays
-            expectedCount = closedExpected + max(0, min(bTotal, completedToday))
+            let closedExpected = bTotal * window.completedDays
+            rawExpected = closedExpected + max(0, min(bTotal, completedToday))
         }
+
+        // Invariant: Expected quota must never drop below recorded executions when tasks are deleted mid-window
+        let expectedCount = max(rawExpected, totalCompleted)
 
         let ratio = expectedCount > 0 ? Double(totalCompleted) / Double(expectedCount) : 1.0
         let percentage = Int(round(min(1.0, ratio) * 100))
@@ -372,7 +452,7 @@ public enum ChoreProjections {
             expectedCount: expectedCount,
             complianceRatio: ratio,
             compliancePercentage: percentage,
-            activeDaysTracked: activeDays,
+            activeDaysTracked: window.activeDaysElapsed,
             totalBaselineTasks: bTotal,
             isNominal: isNominal,
             statusBadgeText: statusText
@@ -392,5 +472,56 @@ public enum ChoreProjections {
 
         let defaultFallback = ["BATHROOM", "GENERAL", "KITCHEN", "SELF"]
         return clean.isEmpty ? defaultFallback : clean
+    }
+
+    // MARK: - Internal Helpers
+
+    internal static func calculateMaintenanceTargets(
+        tasks: [TaskItem],
+        window: ActiveMonthWindow,
+        calendar: Calendar,
+        completionsThisMonth: Int
+    ) -> MaintenancePacingTargets {
+        var totalQuotaAccumulator: Double = 0
+        var expectedPriorAccumulator: Double = 0
+        var expectedTodayAccumulator: Double = 0
+
+        for task in tasks where !task.isDailyBaseline {
+            let taskStartDay: Int
+            if calendar.isDate(task.createdAt, equalTo: window.referenceDate, toGranularity: .month),
+               calendar.isDate(task.createdAt, equalTo: window.referenceDate, toGranularity: .year) {
+                let createdDay = calendar.component(.day, from: task.createdAt)
+                taskStartDay = min(window.currentDay, max(window.startDay, createdDay))
+            } else {
+                taskStartDay = window.startDay
+            }
+
+            let taskActiveDays = max(1, window.totalDaysInMonth - taskStartDay + 1)
+            let taskClosedDays = max(0, window.currentDay - taskStartDay)
+            let taskDaysElapsed = max(1, window.currentDay - taskStartDay + 1)
+
+            if let recurrence = task.recurrence {
+                let intervalDays = max(1, recurrence.intervalDays)
+                let runsThisMonth = Double(taskActiveDays) / Double(intervalDays)
+                totalQuotaAccumulator += runsThisMonth
+                expectedPriorAccumulator += Double(taskClosedDays) / Double(intervalDays)
+                expectedTodayAccumulator += Double(taskDaysElapsed) / Double(intervalDays)
+            } else {
+                totalQuotaAccumulator += 1.0
+                if taskStartDay < window.currentDay {
+                    expectedPriorAccumulator += 1.0
+                }
+                expectedTodayAccumulator += 1.0
+            }
+        }
+
+        let plannedQuota = Int(round(totalQuotaAccumulator))
+        let totalMonthlyQuota = plannedQuota > 0 ? plannedQuota : completionsThisMonth
+
+        return MaintenancePacingTargets(
+            totalMonthlyQuota: totalMonthlyQuota,
+            expectedPrior: expectedPriorAccumulator,
+            expectedToday: expectedTodayAccumulator
+        )
     }
 }

@@ -70,6 +70,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
     public var dueDate: Date
     public var lastCompletedAt: Date?
     public var recurrence: RecurrenceRule?
+    public var createdAt: Date
 
     public init(
         id: UUID = UUID(),
@@ -79,7 +80,8 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         isCompleted: Bool = false,
         dueDate: Date = Date(),
         lastCompletedAt: Date? = nil,
-        recurrence: RecurrenceRule? = RecurrenceRule(count: 1, unit: .week)
+        recurrence: RecurrenceRule? = RecurrenceRule(count: 1, unit: .week),
+        createdAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -89,6 +91,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.dueDate = dueDate
         self.lastCompletedAt = lastCompletedAt
         self.recurrence = recurrence
+        self.createdAt = createdAt ?? .distantPast
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -100,6 +103,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         case dueDate
         case lastCompletedAt
         case recurrence
+        case createdAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -114,6 +118,7 @@ public struct TaskItem: Identifiable, Codable, Equatable, Sendable {
         self.dueDate = try container.decode(Date.self, forKey: .dueDate)
         self.lastCompletedAt = try container.decodeIfPresent(Date.self, forKey: .lastCompletedAt)
         self.recurrence = try container.decodeIfPresent(RecurrenceRule.self, forKey: .recurrence)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .distantPast
     }
 
     public var isDailyBaseline: Bool {

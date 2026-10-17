@@ -129,7 +129,8 @@ public final class DashboardStore {
             targetDueDate: clock.now,
             initialHealthState: .due,
             isCompleted: false,
-            lastCompletedAt: nil
+            lastCompletedAt: nil,
+            createdAt: clock.now
         )
         selectRightTab(.create)
     }
@@ -165,6 +166,15 @@ public final class DashboardStore {
             )
         }
 
+        let resolvedCreatedAt: Date
+        if draft.isNew {
+            resolvedCreatedAt = clock.now
+        } else if let existing = state.tasks.first(where: { $0.id == draft.id }) {
+            resolvedCreatedAt = existing.createdAt
+        } else {
+            resolvedCreatedAt = draft.createdAt ?? clock.now
+        }
+
         let task = TaskItem(
             id: draft.id,
             title: cleanTitle,
@@ -173,7 +183,8 @@ public final class DashboardStore {
             isCompleted: draft.isCompleted,
             dueDate: resolvedDueDate,
             lastCompletedAt: draft.lastCompletedAt,
-            recurrence: recurrence
+            recurrence: recurrence,
+            createdAt: resolvedCreatedAt
         )
 
         ChoreEngine.upsertTask(state: &state, task: task)

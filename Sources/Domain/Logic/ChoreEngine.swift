@@ -113,8 +113,18 @@ public enum ChoreEngine {
         }
     }
 
-    /// Removes a task by ID.
+    /// Removes a task by ID, stamping historical records to preserve daily baseline categorization.
     public static func deleteTask(state: inout DashboardState, id: UUID) {
+        if let task = state.tasks.first(where: { $0.id == id }), task.isDailyBaseline {
+            let cleanTitle = task.title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            for i in state.historyRecords.indices {
+                let matchesId = state.historyRecords[i].taskId == id
+                let matchesTitle = state.historyRecords[i].title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == cleanTitle
+                if matchesId || matchesTitle {
+                    state.historyRecords[i].isDailyBaseline = true
+                }
+            }
+        }
         state.tasks.removeAll(where: { $0.id == id })
     }
 

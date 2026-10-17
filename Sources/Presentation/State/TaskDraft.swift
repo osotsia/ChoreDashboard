@@ -26,6 +26,7 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
     public var initialHealthState: TaskHealthState
     public var isCompleted: Bool
     public var lastCompletedAt: Date?
+    public var createdAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -39,7 +40,8 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
         targetDueDate: Date = Date(),
         initialHealthState: TaskHealthState = .due,
         isCompleted: Bool = false,
-        lastCompletedAt: Date? = nil
+        lastCompletedAt: Date? = nil,
+        createdAt: Date? = nil
     ) {
         self.id = id
         self.isNew = isNew
@@ -53,6 +55,7 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
         self.initialHealthState = initialHealthState
         self.isCompleted = isCompleted
         self.lastCompletedAt = lastCompletedAt
+        self.createdAt = createdAt
     }
 
     /// Converts an existing TaskItem into an editable draft using the injected Clock.
@@ -99,7 +102,8 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             targetDueDate: task.dueDate,
             initialHealthState: task.healthState(using: clock),
             isCompleted: task.isCompleted,
-            lastCompletedAt: task.lastCompletedAt
+            lastCompletedAt: task.lastCompletedAt,
+            createdAt: task.createdAt
         )
     }
 
