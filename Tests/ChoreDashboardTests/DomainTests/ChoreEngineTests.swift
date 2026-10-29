@@ -331,4 +331,42 @@ struct ChoreEngineTests {
         let recNotYet = ChoreEngine.calculateDueDate(health: .notYet, recurrence: singleDayRecurrence, isOneTime: false, repeatCount: 1, repeatUnit: .day, clock: clock)
         #expect(cal.dateComponents([.day], from: clock.now, to: recNotYet).day == 1)
     }
+
+    // MARK: - Fine-Grained Runway Ratio Calculations
+
+    @Test("calculateDueDate with runwayRatio correctly scales target date across entire unit interval")
+    func testCalculateDueDateFromRunwayRatio() {
+        let cal = makeCalendar()
+        let clock = makeClock(year: 2026, month: 5, day: 10)
+        let recurrence = RecurrenceRule(count: 20, unit: .day) // 20-day interval
+
+        // 1. Full 100% Runway -> +20 days
+        let date100 = ChoreEngine.calculateDueDate(runwayRatio: 1.0, isOverdue: false, recurrence: recurrence, isOneTime: false, repeatCount: 20, repeatUnit: .day, clock: clock)
+        #expect(cal.dateComponents([.day], from: clock.now, to: date100).day == 20)
+
+        // 2. 50% Runway -> +10 days
+        let date50 = ChoreEngine.calculateDueDate(runwayRatio: 0.5, isOverdue: false, recurrence: recurrence, isOneTime: false, repeatCount: 20, repeatUnit: .day, clock: clock)
+        #expect(cal.dateComponents([.day], from: clock.now, to: date50).day == 10)
+
+        // 3. 0% Runway (Due Today) -> +0 days
+        let date0 = ChoreEngine.calculateDueDate(runwayRatio: 0.0, isOverdue: false, recurrence: recurrence, isOneTime: false, repeatCount: 20, repeatUnit: .day, clock: clock)
+        #expect(cal.dateComponents([.day], from: clock.now, to: date0).day == 0)
+
+        // 4. Overdue Decay Hazard -> -1 day
+        let dateOverdue = ChoreEngine.calculateDueDate(runwayRatio: 0.5, isOverdue: true, recurrence: recurrence, isOneTime: false, repeatCount: 20, repeatUnit: .day, clock: clock)
+        #expect(cal.dateComponents([.day], from: clock.now, to: dateOverdue).day == -1)
+    }
+
+    @Test("healthState projection accurately categorizes fine-grained runway ratios")
+    func testHealthStateFromRunwayRatio() {
+        #expect(ChoreEngine.healthState(for: 1.0, isOverdue: false) == .good)
+        #expect(ChoreEngine.healthState(for: 0.85, isOverdue: false) == .good)
+        #expect(ChoreEngine.healthState(for: 0.84, isOverdue: false) == .notYet)
+        #expect(ChoreEngine.healthState(for: 0.60, isOverdue: false) == .notYet)
+        #expect(ChoreEngine.healthState(for: 0.59, isOverdue: false) == .halfway)
+        #expect(ChoreEngine.healthState(for: 0.35, isOverdue: false) == .halfway)
+        #expect(ChoreEngine.healthState(for: 0.34, isOverdue: false) == .due)
+        #expect(ChoreEngine.healthState(for: 0.0, isOverdue: false) == .due)
+        #expect(ChoreEngine.healthState(for: 0.9, isOverdue: true) == .overdue)
+    }
 }

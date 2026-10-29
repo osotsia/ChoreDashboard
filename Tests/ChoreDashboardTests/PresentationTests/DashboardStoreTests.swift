@@ -164,6 +164,47 @@ struct DashboardStoreTests {
         #expect(clock.calendar.isDate(store.state.tasks[0].dueDate, inSameDayAs: clock.now))
     }
 
+    @Test("Fine-grained runway adjustment on taskDraft updates dueDate and health state")
+    func testFineGrainedRunwayAdjustmentUpdatesDueDateAndHealth() {
+        let (store, _, clock) = makeStore()
+        let originalDue = clock.calendar.date(byAdding: .day, value: 30, to: clock.now)!
+        let task = TaskItem(
+            title: "Monthly Deep Clean",
+            tag: "GENERAL",
+            dueDate: originalDue,
+            recurrence: RecurrenceRule(count: 1, unit: .month)
+        )
+        store.state.tasks = [task]
+
+        store.startEditing(task: task)
+        // Drag runway to 50% (15 days out)
+        store.taskDraft?.setRunway(ratio: 0.50, clock: clock)
+        store.commitDraft()
+
+        #expect(store.state.tasks.count == 1)
+        let expectedDue = clock.calendar.date(byAdding: .day, value: 15, to: clock.now)!
+        #expect(clock.calendar.isDate(store.state.tasks[0].dueDate, inSameDayAs: expectedDue))
+        #expect(store.state.tasks[0].healthState(using: clock) == .halfway)
+    }
+
+    @Test("Setting overdue decay hazard updates dueDate to yesterday and marks overdue")
+    func testSettingOverdueHazardUpdatesDueDateToYesterday() {
+        let (store, _, clock) = makeStore()
+        let task = TaskItem(
+            title: "Weekly Maintenance",
+            tag: "GENERAL",
+            recurrence: RecurrenceRule(count: 1, unit: .week)
+        )
+        store.state.tasks = [task]
+
+        store.startEditing(task: task)
+        store.taskDraft?.setOverdue(true, clock: clock)
+        store.commitDraft()
+
+        #expect(store.state.tasks.count == 1)
+        #expect(store.state.tasks[0].healthState(using: clock) == .overdue)
+    }
+
     // MARK: - Store Mutators & Concurrency Race Mitigation
 
     @Test("Store mutators correctly execute domain transformations on state")

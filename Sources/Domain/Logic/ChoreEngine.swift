@@ -209,4 +209,42 @@ public enum ChoreEngine {
             return calendar.date(byAdding: .day, value: max(1, interval), to: today) ?? today
         }
     }
+
+    /// Calculates a target due date from fine-grained runway ratio and overdue status.
+    public static func calculateDueDate(
+        runwayRatio: Double,
+        isOverdue: Bool,
+        recurrence: RecurrenceRule?,
+        isOneTime: Bool,
+        repeatCount: Int,
+        repeatUnit: CadenceUnit,
+        clock: Clock
+    ) -> Date {
+        let calendar = clock.calendar
+        let today = clock.now
+
+        if isOverdue {
+            return calendar.date(byAdding: .day, value: -1, to: today) ?? today
+        }
+
+        let interval = isOneTime ? repeatUnit.days(count: repeatCount) : (recurrence?.intervalDays ?? 7)
+        let clampedRatio = max(0.0, min(1.0, runwayRatio))
+        let daysToAdd = Int(round(Double(interval) * clampedRatio))
+        return calendar.date(byAdding: .day, value: daysToAdd, to: today) ?? today
+    }
+
+    /// Evaluates the 5-tier health state from runway ratio and overdue status.
+    public static func healthState(for runwayRatio: Double, isOverdue: Bool) -> TaskHealthState {
+        if isOverdue { return .overdue }
+        let clamped = max(0.0, min(1.0, runwayRatio))
+        if clamped >= 0.85 {
+            return .good
+        } else if clamped >= 0.60 {
+            return .notYet
+        } else if clamped >= 0.35 {
+            return .halfway
+        } else {
+            return .due
+        }
+    }
 }

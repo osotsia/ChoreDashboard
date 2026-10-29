@@ -130,7 +130,9 @@ public final class DashboardStore {
             initialHealthState: .due,
             isCompleted: false,
             lastCompletedAt: nil,
-            createdAt: clock.now
+            createdAt: clock.now,
+            isOverdue: false,
+            runwayRatio: 0.0
         )
         selectRightTab(.create)
     }
@@ -153,9 +155,11 @@ public final class DashboardStore {
         let resolvedDueDate: Date
         if !draft.isNew,
            let existing = state.tasks.first(where: { $0.id == draft.id }),
-           existing.healthState(using: clock) == draft.initialHealthState && existing.recurrence == recurrence {
+           existing.dueDate == draft.targetDueDate && existing.recurrence == recurrence && existing.healthState(using: clock) == draft.initialHealthState {
             resolvedDueDate = existing.dueDate
-        } else {
+        } else if !draft.isNew,
+                  let existing = state.tasks.first(where: { $0.id == draft.id }),
+                  existing.healthState(using: clock) != draft.initialHealthState && draft.targetDueDate == existing.dueDate {
             resolvedDueDate = ChoreEngine.calculateDueDate(
                 health: draft.initialHealthState,
                 recurrence: recurrence,
@@ -164,6 +168,8 @@ public final class DashboardStore {
                 repeatUnit: draft.repeatUnit,
                 clock: clock
             )
+        } else {
+            resolvedDueDate = draft.targetDueDate
         }
 
         let resolvedCreatedAt: Date

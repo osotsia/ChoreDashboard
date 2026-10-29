@@ -74,6 +74,45 @@ struct ComponentTests {
         #expect(gauge.state == healthState)
     }
 
+    @Test("HealthRunwayGauge renders in interactive mode across dynamic segment resolutions")
+    func testInteractiveHealthRunwayGaugeSegmentsAndLevelSelection() {
+        var selectedLevel: Int? = nil
+
+        let interactiveGauge = HealthRunwayGauge(
+            state: .halfway,
+            s: 1.0,
+            segmentCount: 20,
+            filledSegments: 10,
+            totalDays: 30,
+            daysRemaining: 15,
+            targetDate: Date(),
+            isOverdue: false,
+            isInteractive: true,
+            onSelectLevel: { level in selectedLevel = level },
+            onToggleOverdue: {}
+        )
+
+        let _ = interactiveGauge.body
+        #expect(interactiveGauge.segmentCount == 20)
+        #expect(interactiveGauge.filledSegments == 10)
+        #expect(interactiveGauge.isInteractive == true)
+
+        let overdueGauge = HealthRunwayGauge(
+            state: .overdue,
+            s: 1.0,
+            segmentCount: 7,
+            filledSegments: 0,
+            totalDays: 7,
+            daysRemaining: -1,
+            targetDate: Date(),
+            isOverdue: true,
+            isInteractive: true
+        )
+        let _ = overdueGauge.body
+        #expect(overdueGauge.isOverdue == true)
+        #expect(overdueGauge.filledSegments == 0)
+    }
+
     @Test("PanelHeaderView and SectionBadge render titles and badge iconography")
     func testPanelHeaderViewAndSectionBadge() {
         let headerWithoutIcon = PanelHeaderView(title: "Overview", badgeText: "Active")

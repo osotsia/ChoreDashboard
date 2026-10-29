@@ -27,6 +27,8 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
     public var isCompleted: Bool
     public var lastCompletedAt: Date?
     public var createdAt: Date?
+    public var isOverdue: Bool
+    public var runwayRatio: Double
 
     public init(
         id: UUID = UUID(),
@@ -41,7 +43,9 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
         initialHealthState: TaskHealthState = .due,
         isCompleted: Bool = false,
         lastCompletedAt: Date? = nil,
-        createdAt: Date? = nil
+        createdAt: Date? = nil,
+        isOverdue: Bool = false,
+        runwayRatio: Double = 0.0
     ) {
         self.id = id
         self.isNew = isNew
@@ -56,6 +60,8 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
         self.isCompleted = isCompleted
         self.lastCompletedAt = lastCompletedAt
         self.createdAt = createdAt
+        self.isOverdue = isOverdue
+        self.runwayRatio = runwayRatio
     }
 
     /// Converts an existing TaskItem into an editable draft using the injected Clock.
@@ -90,6 +96,11 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             repeatUnit = task.recurrence?.unit ?? .week
         }
 
+        let intervalDays = max(1, isOneTime ? repeatUnit.days(count: repeatCount) : (task.recurrence?.intervalDays ?? 7))
+        let diffDays = calendar.dateComponents([.day], from: today, to: taskDue).day ?? 0
+        let isOverdue = diffDays < 0
+        let clampedRatio = max(0.0, min(1.0, Double(diffDays) / Double(intervalDays)))
+
         return TaskDraft(
             id: task.id,
             isNew: false,
@@ -103,8 +114,48 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             initialHealthState: task.healthState(using: clock),
             isCompleted: task.isCompleted,
             lastCompletedAt: task.lastCompletedAt,
-            createdAt: task.createdAt
+            createdAt: task.createdAt,
+            isOverdue: isOverdue,
+            runwayRatio: clampedRatio
         )
+    }
+
+    // MARK: - Fine-Grained Runway Mutators
+
+    /// Updates the fine-grained runway ratio and synchronizes targetDueDate and initialHealthState.
+    public mutating func setRunway(ratio: Double, clock: Clock) {
+        self.isOverdue = false
+        self.runwayRatio = max(0.0, min(1.0, ratio))
+        self.targetDueDate = ChoreEngine.calculateDueDate(
+            runwayRatio: self.runwayRatio,
+            isOverdue: false,
+            recurrence: isOneTime ? nil : RecurrenceRule(count: repeatCount, unit: repeatUnit),
+            isOneTime: isOneTime,
+            repeatCount: repeatCount,
+            repeatUnit: repeatUnit,
+            clock: clock
+        )
+        self.initialHealthState = ChoreEngine.healthState(for: self.runwayRatio, isOverdue: false)
+    }
+
+    /// Toggles or sets the overdue decay hazard state.
+    public mutating func setOverdue(_ overdue: Bool, clock: Clock) {
+        self.isOverdue = overdue
+        if overdue {
+            self.runwayRatio = 0.0
+            self.targetDueDate = ChoreEngine.calculateDueDate(
+                runwayRatio: 0.0,
+                isOverdue: true,
+                recurrence: isOneTime ? nil : RecurrenceRule(count: repeatCount, unit: repeatUnit),
+                isOneTime: isOneTime,
+                repeatCount: repeatCount,
+                repeatUnit: repeatUnit,
+                clock: clock
+            )
+            self.initialHealthState = .overdue
+        } else {
+            setRunway(ratio: 0.0, clock: clock)
+        }
     }
 
     // MARK: - Presentation Telemetry Projections

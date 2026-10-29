@@ -64,10 +64,10 @@ public struct TaskEditorView: View {
                     s: s
                 )
 
-                TaskTimingSection(draft: draftBinding, s: s)
+                TaskTimingSection(draft: draftBinding, clock: store.clock, s: s)
 
                 if !draft.isOneTime {
-                    TaskHealthSection(health: draftBinding.initialHealthState, s: s)
+                    TaskHealthSection(draft: draftBinding, clock: store.clock, s: s)
                 }
 
                 TaskRoutingCard(info: draft.routingInfo, health: draft.initialHealthState, s: s)
@@ -241,6 +241,7 @@ private struct TaskTagSection: View {
 // MARK: - Section 3: Timing, Recurrence & Duration
 private struct TaskTimingSection: View {
     @Binding var draft: TaskDraft
+    let clock: Clock
     let s: CGFloat
 
     var body: some View {
@@ -257,8 +258,10 @@ private struct TaskTimingSection: View {
                     CadenceTypeTab(title: "RECURRING", isSelected: !draft.isOneTime, s: s) {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                             draft.isOneTime = false
-                            if draft.initialHealthState == .overdue {
-                                draft.initialHealthState = .due
+                            if draft.isOverdue {
+                                draft.setOverdue(false, clock: clock)
+                            } else {
+                                draft.setRunway(ratio: draft.runwayRatio, clock: clock)
                             }
                         }
                     }
@@ -275,8 +278,21 @@ private struct TaskTimingSection: View {
 
             if !draft.isOneTime {
                 HStack(spacing: 10 * s) {
-                    NumericStepper(value: $draft.repeatCount, range: 1...99, s: s)
-                    CadenceUnitSelector(unit: $draft.repeatUnit, count: draft.repeatCount, s: s)
+                    NumericStepper(value: Binding(
+                        get: { draft.repeatCount },
+                        set: {
+                            draft.repeatCount = $0
+                            draft.setRunway(ratio: draft.runwayRatio, clock: clock)
+                        }
+                    ), range: 1...99, s: s)
+
+                    CadenceUnitSelector(unit: Binding(
+                        get: { draft.repeatUnit },
+                        set: {
+                            draft.repeatUnit = $0
+                            draft.setRunway(ratio: draft.runwayRatio, clock: clock)
+                        }
+                    ), count: draft.repeatCount, s: s)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8 * s) {
@@ -294,11 +310,17 @@ private struct TaskTimingSection: View {
                             CadenceTypeTab(title: "TODAY", isSelected: draft.initialHealthState == .due, s: s) {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                     draft.initialHealthState = .due
+                                    draft.targetDueDate = clock.now
                                 }
                             }
                             CadenceTypeTab(title: "IN FUTURE", isSelected: draft.isOneTimeInFuture, s: s) {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                     draft.initialHealthState = .good
+                                    draft.targetDueDate = clock.calendar.date(
+                                        byAdding: .day,
+                                        value: draft.repeatUnit.days(count: draft.repeatCount),
+                                        to: clock.now
+                                    ) ?? clock.now
                                 }
                             }
                         }
@@ -309,8 +331,29 @@ private struct TaskTimingSection: View {
 
                     if draft.isOneTimeInFuture {
                         HStack(spacing: 10 * s) {
-                            NumericStepper(value: $draft.repeatCount, range: 1...99, s: s)
-                            CadenceUnitSelector(unit: $draft.repeatUnit, count: draft.repeatCount, s: s)
+                            NumericStepper(value: Binding(
+                                get: { draft.repeatCount },
+                                set: {
+                                    draft.repeatCount = $0
+                                    draft.targetDueDate = clock.calendar.date(
+                                        byAdding: .day,
+                                        value: draft.repeatUnit.days(count: $0),
+                                        to: clock.now
+                                    ) ?? clock.now
+                                }
+                            ), range: 1...99, s: s)
+
+                            CadenceUnitSelector(unit: Binding(
+                                get: { draft.repeatUnit },
+                                set: {
+                                    draft.repeatUnit = $0
+                                    draft.targetDueDate = clock.calendar.date(
+                                        byAdding: .day,
+                                        value: $0.days(count: draft.repeatCount),
+                                        to: clock.now
+                                    ) ?? clock.now
+                                }
+                            ), count: draft.repeatCount, s: s)
                         }
                     }
                 }
@@ -357,46 +400,86 @@ private struct TaskTimingSection: View {
     }
 }
 
-// MARK: - Section 4: Operational Health
+// MARK: - Section 4: Operational Health (Interactive Segmented Runway Gauge)
 private struct TaskHealthSection: View {
-    @Binding var health: TaskHealthState
+    @Binding var draft: TaskDraft
+    let clock: Clock
     let s: CGFloat
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8 * s) {
-            Text("CURRENT OPERATIONAL STATUS")
-                .font(.system(size: 10 * s, weight: .bold))
-                .tracking(1.4 * s)
-                .foregroundColor(AppConfig.Colors.subtextGrey)
+    private var intervalDays: Int {
+        max(1, draft.repeatUnit.days(count: draft.repeatCount))
+    }
 
-            HStack(spacing: 5 * s) {
-                ForEach(TaskHealthState.allCases, id: \.self) { state in
-                    let isSelected = health == state
-                    Button {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                            health = state
-                        }
-                    } label: {
-                        VStack(spacing: 2 * s) {
-                            Text(state.rawValue)
-                                .font(.system(size: 10 * s, weight: .black))
-                                .tracking(0.5 * s)
-                            Text(state.subtitle)
-                                .font(.system(size: 7.5 * s, weight: .bold))
-                                .opacity(isSelected ? 0.75 : 0.6)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40 * s)
-                        .background(isSelected ? (state == .overdue ? Color.red : Color.black) : Color.white)
-                        .foregroundColor(isSelected ? .white : Color.black)
-                        .clipShape(RoundedRectangle(cornerRadius: 6 * s))
-                        .overlay(RoundedRectangle(cornerRadius: 6 * s).strokeBorder(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1 * s))
+    private var segmentCount: Int {
+        max(2, min(intervalDays, 20))
+    }
+
+    private var filledSegments: Int {
+        if draft.isOverdue { return 0 }
+        return Int(round(draft.runwayRatio * Double(segmentCount)))
+    }
+
+    private var daysRemaining: Int {
+        if draft.isOverdue { return -1 }
+        return Int(round(Double(intervalDays) * draft.runwayRatio))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6 * s) {
+            HStack {
+                Text("CURRENT OPERATIONAL RUNWAY")
+                    .font(.system(size: 10 * s, weight: .bold))
+                    .tracking(1.4 * s)
+                    .foregroundColor(AppConfig.Colors.subtextGrey)
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        draft.setOverdue(!draft.isOverdue, clock: clock)
                     }
-                    .buttonStyle(.plain)
+                } label: {
+                    HStack(spacing: 3 * s) {
+                        Image(systemName: draft.isOverdue ? "radiation" : "exclamationmark.triangle")
+                            .font(.system(size: 8.5 * s, weight: .black))
+                        Text(draft.isOverdue ? "DECAY HAZARD" : "MARK OVERDUE")
+                            .font(.system(size: 8 * s, weight: .bold, design: .monospaced))
+                    }
+                    .foregroundColor(draft.isOverdue ? .white : AppConfig.Colors.statusRed)
+                    .padding(.horizontal, 7 * s)
+                    .padding(.vertical, 3.5 * s)
+                    .background(draft.isOverdue ? AppConfig.Colors.statusRed : Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 4 * s))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4 * s)
+                            .strokeBorder(draft.isOverdue ? Color.clear : AppConfig.Colors.statusRed.opacity(0.4), lineWidth: 1 * s)
+                    )
                 }
+                .buttonStyle(.plain)
             }
 
-            HealthRunwayGauge(state: health, s: s)
+            HealthRunwayGauge(
+                state: draft.initialHealthState,
+                s: s,
+                segmentCount: segmentCount,
+                filledSegments: filledSegments,
+                totalDays: intervalDays,
+                daysRemaining: daysRemaining,
+                targetDate: draft.targetDueDate,
+                isOverdue: draft.isOverdue,
+                isInteractive: true,
+                onSelectLevel: { level in
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        let ratio = Double(level) / Double(segmentCount)
+                        draft.setRunway(ratio: ratio, clock: clock)
+                    }
+                },
+                onToggleOverdue: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        draft.setOverdue(!draft.isOverdue, clock: clock)
+                    }
+                }
+            )
         }
     }
 }
