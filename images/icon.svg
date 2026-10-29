@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Calibrated subtle rim lighting for the base plate -->
+    <linearGradient id="rimLight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3A3E47" />
+      <stop offset="100%" stop-color="#181A1F" />
+    </linearGradient>
+
+    <!-- Deep obsidian plate background -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#181A1F" />
+      <stop offset="100%" stop-color="#0E1013" />
+    </linearGradient>
+  </defs>
+
+  <!-- 1. BASE SQUIRCLE (macOS Standard: 824x824 at (100, 100)) -->
+  <rect 
+    x="100" 
+    y="100" 
+    width="824" 
+    height="824" 
+    rx="185" 
+    fill="url(#bgGradient)" 
+    stroke="url(#rimLight)" 
+    stroke-width="5" 
+  />
+
+  <!-- 2. INNER CONCENTRIC TELEMETRY RING (Precision Instrument Hairline) -->
+  <circle 
+    cx="512" 
+    cy="512" 
+    r="185" 
+    fill="none" 
+    stroke="#FFFFFF" 
+    stroke-width="2" 
+    opacity="0.12" 
+  />
+
+  <!-- 3. CIRCULAR SEGMENTED RUNWAY GAUGE (Safari / Chronograph Motif) -->
+  <!-- 4 Arcs at R=260, 48px stroke width with 8° cardinal gaps -->
+  <g id="runway-ring">
+    <!-- Quadrant 1: Top-Right (0° to 90°) · FILLED -->
+    <path 
+      d="M 530 253 A 260 260 0 0 1 771 494" 
+      fill="none" 
+      stroke="#FFFFFF" 
+      stroke-width="48" 
+      stroke-linecap="round" 
+    />
+
+    <!-- Quadrant 2: Bottom-Right (90° to 180°) · FILLED -->
+    <path 
+      d="M 771 530 A 260 260 0 0 1 530 771" 
+      fill="none" 
+      stroke="#FFFFFF" 
+      stroke-width="48" 
+      stroke-linecap="round" 
+    />
+
+    <!-- Quadrant 3: Bottom-Left (180° to 270°) · FILLED -->
+    <path 
+      d="M 494 771 A 260 260 0 0 1 253 530" 
+      fill="none" 
+      stroke="#FFFFFF" 
+      stroke-width="48" 
+      stroke-linecap="round" 
+    />
+
+    <!-- Quadrant 4: Top-Left (270° to 360°) · UNFILLED CAPACITY SECTOR -->
+    <path 
+      d="M 253 494 A 260 260 0 0 1 494 253" 
+      fill="none" 
+      stroke="#FFFFFF" 
+      stroke-width="48" 
+      stroke-linecap="round" 
+      opacity="0.15" 
+    />
+  </g>
+
+  <!-- 4. CENTER HERO CHECKMARK (Bold Operational Indicator) -->
+  <path 
+    d="M 408 514 L 482 588 L 626 422" 
+    fill="none" 
+    stroke="#FFFFFF" 
+    stroke-width="46" 
+    stroke-linecap="round" 
+    stroke-linejoin="round" 
+  />
+</svg>

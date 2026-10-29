@@ -17,7 +17,7 @@ struct ChoreDashboardApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
 
-        MenuBarExtra("Chore Dashboard", systemImage: "checklist") {
+        MenuBarExtra {
             Button("Show Dashboard") {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "dashboard")
@@ -36,6 +36,8 @@ struct ChoreDashboardApp: App {
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
+        } label: {
+            Image(nsImage: MenuBarIcon.template)
         }
     }
 }
