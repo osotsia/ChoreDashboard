@@ -199,8 +199,13 @@ public final class DashboardStore {
     }
 
     public func deleteTask(id: UUID) {
-        ChoreEngine.deleteTask(state: &state, id: id)
+        ChoreEngine.deleteTask(state: &state, id: id, clock: clock)
         dismissDraft()
+        persistAsync()
+    }
+
+    public func deleteHistoryRecord(id: UUID) {
+        ChoreEngine.deleteHistoryRecord(state: &state, id: id, clock: clock)
         persistAsync()
     }
 

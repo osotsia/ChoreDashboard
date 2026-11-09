@@ -22,8 +22,11 @@ public enum ChoreEngine {
                 } else if let recurrence = state.tasks[i].recurrence {
                     state.tasks[i].isCompleted = false
                     if !state.tasks[i].isDailyBaseline {
-                        let intervalDays = recurrence.intervalDays
-                        state.tasks[i].dueDate = calendar.date(byAdding: .day, value: intervalDays, to: completedAt) ?? state.tasks[i].dueDate
+                        let isCustomFutureDue = calendar.startOfDay(for: state.tasks[i].dueDate) > calendar.startOfDay(for: completedAt)
+                        if !isCustomFutureDue {
+                            let intervalDays = recurrence.intervalDays
+                            state.tasks[i].dueDate = calendar.date(byAdding: .day, value: intervalDays, to: completedAt) ?? state.tasks[i].dueDate
+                        }
                     }
                     didMutate = true
                 }
@@ -54,7 +57,9 @@ public enum ChoreEngine {
             )
             state.historyRecords.insert(record, at: 0)
         } else {
-            if let recordIdx = state.historyRecords.firstIndex(where: { $0.taskId == task.id }) {
+            if let recordIdx = state.historyRecords.firstIndex(where: {
+                $0.taskId == task.id && clock.calendar.isDate($0.completedAt, inSameDayAs: clock.now)
+            }) {
                 state.historyRecords.remove(at: recordIdx)
             }
         }
@@ -98,7 +103,8 @@ public enum ChoreEngine {
         }
 
         state.historyRecords.removeAll { record in
-            guard let taskId = record.taskId, baselineTaskIds.contains(taskId) else { return false }
+            let isBaseline = record.isDailyBaseline || (record.taskId.map { baselineTaskIds.contains($0) } ?? false)
+            guard isBaseline else { return false }
             return calendar.isDate(record.completedAt, inSameDayAs: clock.now)
         }
     }
@@ -114,18 +120,55 @@ public enum ChoreEngine {
     }
 
     /// Removes a task by ID, stamping historical records to preserve daily baseline categorization.
-    public static func deleteTask(state: inout DashboardState, id: UUID) {
+    public static func deleteTask(state: inout DashboardState, id: UUID, clock: Clock? = nil) {
         if let task = state.tasks.first(where: { $0.id == id }), task.isDailyBaseline {
-            let cleanTitle = task.title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            for i in state.historyRecords.indices {
-                let matchesId = state.historyRecords[i].taskId == id
-                let matchesTitle = state.historyRecords[i].title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == cleanTitle
-                if matchesId || matchesTitle {
-                    state.historyRecords[i].isDailyBaseline = true
-                }
+            for i in state.historyRecords.indices where state.historyRecords[i].taskId == id {
+                state.historyRecords[i].isDailyBaseline = true
+            }
+
+            // Account for unfulfilled baseline obligations if deleted mid-tracking window
+            let calendar = clock?.calendar ?? Calendar(identifier: .gregorian)
+            let now = clock?.now ?? state.historyRecords.map(\.completedAt).max() ?? state.trackingStartDate ?? calendar.startOfDay(for: Date())
+            let window = ActiveMonthWindow(
+                now: now,
+                trackingStartDate: state.trackingStartDate,
+                fallbackStartDay: 1,
+                calendar: calendar
+            )
+            let taskStartDay: Int
+            if calendar.isDate(task.createdAt, equalTo: window.referenceDate, toGranularity: .month),
+               calendar.isDate(task.createdAt, equalTo: window.referenceDate, toGranularity: .year) {
+                let createdDay = calendar.component(.day, from: task.createdAt)
+                taskStartDay = min(window.currentDay, max(window.startDay, createdDay))
+            } else {
+                taskStartDay = window.startDay
+            }
+            let closedDays = max(0, window.currentDay - taskStartDay)
+            let completedCount = state.historyRecords.filter { record in
+                record.taskId == id &&
+                calendar.isDate(record.completedAt, equalTo: window.referenceDate, toGranularity: .month) &&
+                calendar.isDate(record.completedAt, equalTo: window.referenceDate, toGranularity: .year)
+            }.count
+
+            let deficit = max(0, closedDays - completedCount)
+            if deficit > 0 {
+                state.baselineHistoricalDeficit = (state.baselineHistoricalDeficit ?? 0) + deficit
             }
         }
         state.tasks.removeAll(where: { $0.id == id })
+    }
+
+    /// Deletes an individual history record by ID, synchronizing active task state if necessary.
+    public static func deleteHistoryRecord(state: inout DashboardState, id: UUID, clock: Clock) {
+        guard let recordIdx = state.historyRecords.firstIndex(where: { $0.id == id }) else { return }
+        let record = state.historyRecords.remove(at: recordIdx)
+
+        if let taskId = record.taskId,
+           let taskIdx = state.tasks.firstIndex(where: { $0.id == taskId }),
+           clock.calendar.isDate(record.completedAt, inSameDayAs: clock.now) {
+            state.tasks[taskIdx].isCompleted = false
+            state.tasks[taskIdx].lastCompletedAt = nil
+        }
     }
 
     /// Clears all tasks, history records, and custom tags, resetting the operational baseline.

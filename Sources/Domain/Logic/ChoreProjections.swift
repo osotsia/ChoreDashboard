@@ -133,41 +133,48 @@ public struct ActiveMonthWindow: Sendable, Equatable {
 /// Provides O(1) set-based disambiguation between daily baseline routines and maintenance tasks.
 public struct TaskClassificationIndex: Sendable {
     public let allTaskIds: Set<UUID>
-    public let baselineTaskIds: Set<UUID>
+    public let activeBaselineTaskIds: Set<UUID>
+    public let historicalBaselineTaskIds: Set<UUID>
     public let baselineTitles: Set<String>
+
+    public var baselineTaskIds: Set<UUID> {
+        activeBaselineTaskIds.union(historicalBaselineTaskIds)
+    }
 
     public init(tasks: [TaskItem], historyRecords: [HistoryRecord] = []) {
         var allIds = Set<UUID>()
-        var baseIds = Set<UUID>()
+        var activeBaseIds = Set<UUID>()
+        var histBaseIds = Set<UUID>()
         var titles = Set<String>()
 
         for task in tasks {
             allIds.insert(task.id)
             if task.isDailyBaseline {
-                baseIds.insert(task.id)
+                activeBaseIds.insert(task.id)
                 titles.insert(task.title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
             }
         }
 
-        // Index historical records explicitly flagged as daily baseline so that
-        // deleting an active task never causes historical completions to drift into maintenance
         for record in historyRecords where record.isDailyBaseline {
             if let taskId = record.taskId {
-                baseIds.insert(taskId)
+                histBaseIds.insert(taskId)
             }
             titles.insert(record.title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
         }
 
         self.allTaskIds = allIds
-        self.baselineTaskIds = baseIds
+        self.activeBaselineTaskIds = activeBaseIds
+        self.historicalBaselineTaskIds = histBaseIds
         self.baselineTitles = titles
     }
 
     public func isBaselineRecord(_ record: HistoryRecord) -> Bool {
         if record.isDailyBaseline { return true }
         if let taskId = record.taskId {
-            if baselineTaskIds.contains(taskId) { return true }
-            if allTaskIds.contains(taskId) { return false }
+            if allTaskIds.contains(taskId) {
+                return activeBaselineTaskIds.contains(taskId)
+            }
+            if historicalBaselineTaskIds.contains(taskId) { return true }
         }
         let cleanTitle = record.title.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         return baselineTitles.contains(cleanTitle)
@@ -421,10 +428,11 @@ public enum ChoreProjections {
 
         // Closed days require full baseline quota; in-progress today adds only what has been completed
         let rawExpected: Int
+        let historicalDeficit = state.baselineHistoricalDeficit ?? 0
         if window.completedDays == 0 {
-            rawExpected = max(0, min(bTotal, completedToday))
+            rawExpected = max(0, min(bTotal, completedToday)) + historicalDeficit
         } else {
-            let closedExpected = bTotal * window.completedDays
+            let closedExpected = (bTotal * window.completedDays) + historicalDeficit
             rawExpected = closedExpected + max(0, min(bTotal, completedToday))
         }
 

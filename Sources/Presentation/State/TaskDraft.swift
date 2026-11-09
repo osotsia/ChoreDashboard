@@ -98,8 +98,8 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
 
         let intervalDays = max(1, isOneTime ? repeatUnit.days(count: repeatCount) : (task.recurrence?.intervalDays ?? 7))
         let diffDays = calendar.dateComponents([.day], from: today, to: taskDue).day ?? 0
-        let isOverdue = diffDays < 0
-        let clampedRatio = max(0.0, min(1.0, Double(diffDays) / Double(intervalDays)))
+        let isOverdue = !task.isCompleted && diffDays < 0
+        let clampedRatio = task.isCompleted ? 1.0 : max(0.0, min(1.0, Double(diffDays) / Double(intervalDays)))
 
         return TaskDraft(
             id: task.id,

@@ -6,6 +6,7 @@ public struct HistoryTimelineView: View {
     public var onExport: (() -> Void)? = nil
     public var onLoad: (() -> Void)? = nil
     public var onClear: (() -> Void)? = nil
+    public var onDeleteRecord: ((UUID) -> Void)? = nil
     @Environment(\.scaleFactor) private var s
 
     private static let dayDateFormatter: DateFormatter = {
@@ -24,12 +25,14 @@ public struct HistoryTimelineView: View {
         records: [HistoryRecord],
         onExport: (() -> Void)? = nil,
         onLoad: (() -> Void)? = nil,
-        onClear: (() -> Void)? = nil
+        onClear: (() -> Void)? = nil,
+        onDeleteRecord: ((UUID) -> Void)? = nil
     ) {
         self.records = records
         self.onExport = onExport
         self.onLoad = onLoad
         self.onClear = onClear
+        self.onDeleteRecord = onDeleteRecord
     }
 
     private struct DayGroup: Identifiable {
@@ -214,6 +217,16 @@ public struct HistoryTimelineView: View {
                                     .padding(.top, 6 * s)
                             }
                             .padding(.vertical, 4 * s)
+                            .contentShape(Rectangle())
+                            .contextMenu {
+                                if let onDeleteRecord = onDeleteRecord {
+                                    Button(role: .destructive) {
+                                        onDeleteRecord(record.id)
+                                    } label: {
+                                        Label("Delete History Entry", systemImage: "trash")
+                                    }
+                                }
+                            }
                         }
                     }
                 }

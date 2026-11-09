@@ -155,7 +155,8 @@ public struct DashboardView: View {
                                         records: store.state.historyRecords,
                                         onExport: { store.exportStateToDisk() },
                                         onLoad: { store.importStateFromDisk() },
-                                        onClear: { store.clearAllDataWithConfirmation() }
+                                        onClear: { store.clearAllDataWithConfirmation() },
+                                        onDeleteRecord: { store.deleteHistoryRecord(id: $0) }
                                     )
                                     .padding(.horizontal, 24 * scalar)
                                     .padding(.top, 12 * scalar)
