@@ -214,6 +214,18 @@ public enum ChoreEngine {
         }
     }
 
+    /// Evaluates the estimated remaining days for a given health tier and cadence interval.
+    public static func estimatedDaysRemaining(health: TaskHealthState, intervalDays: Int) -> Int {
+        let interval = max(1, intervalDays)
+        switch health {
+        case .overdue: return -1
+        case .due:     return 0
+        case .halfway: return max(1, interval / 2)
+        case .notYet:  return max(1, Int(round(Double(interval) * 0.75)))
+        case .good:    return interval
+        }
+    }
+
     /// Calculates a target due date from a health runway state and recurrence specification.
     public static func calculateDueDate(
         health: TaskHealthState,
@@ -244,12 +256,9 @@ public enum ChoreEngine {
             return calendar.date(byAdding: .day, value: -1, to: today) ?? today
         case .due:
             return today
-        case .halfway:
-            return calendar.date(byAdding: .day, value: max(1, interval / 2), to: today) ?? today
-        case .notYet:
-            return calendar.date(byAdding: .day, value: max(1, Int(round(Double(interval) * 0.75))), to: today) ?? today
-        case .good:
-            return calendar.date(byAdding: .day, value: max(1, interval), to: today) ?? today
+        case .halfway, .notYet, .good:
+            let days = estimatedDaysRemaining(health: health, intervalDays: interval)
+            return calendar.date(byAdding: .day, value: days, to: today) ?? today
         }
     }
 
@@ -289,5 +298,70 @@ public enum ChoreEngine {
         } else {
             return .due
         }
+    }
+
+    /// Infers recurrence cadence components and runway telemetry for a task.
+    public static func inferCadence(
+        for task: TaskItem,
+        clock: Clock
+    ) -> (repeatCount: Int, repeatUnit: CadenceUnit, isOverdue: Bool, runwayRatio: Double) {
+        let calendar = clock.calendar
+        let today = calendar.startOfDay(for: clock.now)
+        let taskDue = calendar.startOfDay(for: task.dueDate)
+        let diffDays = calendar.dateComponents([.day], from: today, to: taskDue).day ?? 0
+
+        let repeatCount: Int
+        let repeatUnit: CadenceUnit
+
+        if task.isOneTime {
+            if diffDays > 0 {
+                if diffDays % 30 == 0 {
+                    repeatCount = max(1, diffDays / 30)
+                    repeatUnit = .month
+                } else if diffDays % 7 == 0 {
+                    repeatCount = max(1, diffDays / 7)
+                    repeatUnit = .week
+                } else {
+                    repeatCount = max(1, diffDays)
+                    repeatUnit = .day
+                }
+            } else {
+                repeatCount = 1
+                repeatUnit = .day
+            }
+        } else {
+            repeatCount = task.recurrence?.count ?? 1
+            repeatUnit = task.recurrence?.unit ?? .week
+        }
+
+        let intervalDays = max(1, task.isOneTime ? repeatUnit.days(count: repeatCount) : (task.recurrence?.intervalDays ?? 7))
+        let isOverdue = !task.isCompleted && diffDays < 0
+        let clampedRatio = task.isCompleted ? 1.0 : max(0.0, min(1.0, Double(diffDays) / Double(intervalDays)))
+
+        return (repeatCount, repeatUnit, isOverdue, clampedRatio)
+    }
+
+    /// Resolves runway state (dueDate, healthState, clampedRatio) from a runway adjustment.
+    public static func resolveRunway(
+        ratio: Double,
+        isOverdue: Bool,
+        isOneTime: Bool,
+        repeatCount: Int,
+        repeatUnit: CadenceUnit,
+        clock: Clock
+    ) -> (dueDate: Date, health: TaskHealthState, ratio: Double) {
+        let recurrence: RecurrenceRule? = isOneTime ? nil : RecurrenceRule(count: repeatCount, unit: repeatUnit)
+        let effectiveRatio = isOverdue ? 0.0 : max(0.0, min(1.0, ratio))
+        let dueDate = calculateDueDate(
+            runwayRatio: effectiveRatio,
+            isOverdue: isOverdue,
+            recurrence: recurrence,
+            isOneTime: isOneTime,
+            repeatCount: repeatCount,
+            repeatUnit: repeatUnit,
+            clock: clock
+        )
+        let health = healthState(for: effectiveRatio, isOverdue: isOverdue)
+        return (dueDate, health, effectiveRatio)
     }
 }

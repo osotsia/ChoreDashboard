@@ -66,40 +66,7 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
 
     /// Converts an existing TaskItem into an editable draft using the injected Clock.
     public static func from(task: TaskItem, clock: Clock = SystemClock()) -> TaskDraft {
-        let calendar = clock.calendar
-        let today = calendar.startOfDay(for: clock.now)
-        let taskDue = calendar.startOfDay(for: task.dueDate)
-
-        let isOneTime = task.isOneTime
-        let repeatCount: Int
-        let repeatUnit: CadenceUnit
-
-        if isOneTime {
-            let diffDays = calendar.dateComponents([.day], from: today, to: taskDue).day ?? 0
-            if diffDays > 0 {
-                if diffDays % 30 == 0 {
-                    repeatCount = max(1, diffDays / 30)
-                    repeatUnit = .month
-                } else if diffDays % 7 == 0 {
-                    repeatCount = max(1, diffDays / 7)
-                    repeatUnit = .week
-                } else {
-                    repeatCount = max(1, diffDays)
-                    repeatUnit = .day
-                }
-            } else {
-                repeatCount = 1
-                repeatUnit = .day
-            }
-        } else {
-            repeatCount = task.recurrence?.count ?? 1
-            repeatUnit = task.recurrence?.unit ?? .week
-        }
-
-        let intervalDays = max(1, isOneTime ? repeatUnit.days(count: repeatCount) : (task.recurrence?.intervalDays ?? 7))
-        let diffDays = calendar.dateComponents([.day], from: today, to: taskDue).day ?? 0
-        let isOverdue = !task.isCompleted && diffDays < 0
-        let clampedRatio = task.isCompleted ? 1.0 : max(0.0, min(1.0, Double(diffDays) / Double(intervalDays)))
+        let (repeatCount, repeatUnit, isOverdue, runwayRatio) = ChoreEngine.inferCadence(for: task, clock: clock)
 
         return TaskDraft(
             id: task.id,
@@ -107,7 +74,7 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             title: task.title,
             tag: task.tag,
             durationMinutes: task.durationMinutes,
-            isOneTime: isOneTime,
+            isOneTime: task.isOneTime,
             repeatCount: repeatCount,
             repeatUnit: repeatUnit,
             targetDueDate: task.dueDate,
@@ -116,7 +83,7 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             lastCompletedAt: task.lastCompletedAt,
             createdAt: task.createdAt,
             isOverdue: isOverdue,
-            runwayRatio: clampedRatio
+            runwayRatio: runwayRatio
         )
     }
 
@@ -125,40 +92,40 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
     /// Updates the fine-grained runway ratio and synchronizes targetDueDate and initialHealthState.
     public mutating func setRunway(ratio: Double, clock: Clock) {
         self.isOverdue = false
-        self.runwayRatio = max(0.0, min(1.0, ratio))
-        self.targetDueDate = ChoreEngine.calculateDueDate(
-            runwayRatio: self.runwayRatio,
+        let resolved = ChoreEngine.resolveRunway(
+            ratio: ratio,
             isOverdue: false,
-            recurrence: isOneTime ? nil : RecurrenceRule(count: repeatCount, unit: repeatUnit),
             isOneTime: isOneTime,
             repeatCount: repeatCount,
             repeatUnit: repeatUnit,
             clock: clock
         )
-        self.initialHealthState = ChoreEngine.healthState(for: self.runwayRatio, isOverdue: false)
+        self.runwayRatio = resolved.ratio
+        self.targetDueDate = resolved.dueDate
+        self.initialHealthState = resolved.health
     }
 
     /// Toggles or sets the overdue decay hazard state.
     public mutating func setOverdue(_ overdue: Bool, clock: Clock) {
         self.isOverdue = overdue
-        if overdue {
-            self.runwayRatio = 0.0
-            self.targetDueDate = ChoreEngine.calculateDueDate(
-                runwayRatio: 0.0,
-                isOverdue: true,
-                recurrence: isOneTime ? nil : RecurrenceRule(count: repeatCount, unit: repeatUnit),
-                isOneTime: isOneTime,
-                repeatCount: repeatCount,
-                repeatUnit: repeatUnit,
-                clock: clock
-            )
-            self.initialHealthState = .overdue
-        } else {
-            setRunway(ratio: 0.0, clock: clock)
-        }
+        let resolved = ChoreEngine.resolveRunway(
+            ratio: overdue ? 0.0 : runwayRatio,
+            isOverdue: overdue,
+            isOneTime: isOneTime,
+            repeatCount: repeatCount,
+            repeatUnit: repeatUnit,
+            clock: clock
+        )
+        self.runwayRatio = resolved.ratio
+        self.targetDueDate = resolved.dueDate
+        self.initialHealthState = resolved.health
     }
 
     // MARK: - Presentation Telemetry Projections
+    public var intervalDays: Int {
+        max(1, repeatUnit.days(count: repeatCount))
+    }
+
     public var isOneTimeInFuture: Bool {
         isOneTime && initialHealthState != .due && initialHealthState != .overdue
     }
@@ -170,13 +137,11 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             } else if initialHealthState == .due {
                 return TaskRoutingInfo(icon: "bolt.fill", text: "Immediate action: Placed on Today's Active Focus Queue.", isImmediate: true)
             } else {
-                let intervalDays = repeatUnit.days(count: repeatCount)
                 let timeStr = repeatUnit.displayString(count: repeatCount).lowercased()
                 return TaskRoutingInfo(icon: "calendar", text: "Scheduled execution: Due in \(repeatCount) \(timeStr) (\(intervalDays)d) in Upcoming Horizon.", isImmediate: false)
             }
         }
 
-        let intervalDays = repeatUnit.days(count: repeatCount)
         switch initialHealthState {
         case .overdue:
             return TaskRoutingInfo(icon: "exclamationmark.triangle.fill", text: "Overdue hazard: Assigned high priority on Active Focus.", isImmediate: true)
@@ -186,13 +151,68 @@ public struct TaskDraft: Identifiable, Equatable, Sendable {
             }
             return TaskRoutingInfo(icon: "bolt.fill", text: "Due today: Active on Today's Focus Queue.", isImmediate: true)
         case .halfway:
-            let daysLeft = max(1, intervalDays / 2)
+            let daysLeft = ChoreEngine.estimatedDaysRemaining(health: .halfway, intervalDays: intervalDays)
             return TaskRoutingInfo(icon: "clock", text: "Halfway runway: Estimated due in ~\(daysLeft) days (Upcoming Horizon).", isImmediate: false)
         case .notYet:
-            let daysLeft = max(1, Int(round(Double(intervalDays) * 0.75)))
+            let daysLeft = ChoreEngine.estimatedDaysRemaining(health: .notYet, intervalDays: intervalDays)
             return TaskRoutingInfo(icon: "clock", text: "In progress: Estimated due in ~\(daysLeft) days (Upcoming Horizon).", isImmediate: false)
         case .good:
-            return TaskRoutingInfo(icon: "checkmark.circle", text: "Cycle fresh: Next due in \(intervalDays) days (Upcoming Horizon).", isImmediate: false)
+            let daysLeft = ChoreEngine.estimatedDaysRemaining(health: .good, intervalDays: intervalDays)
+            return TaskRoutingInfo(icon: "checkmark.circle", text: "Cycle fresh: Next due in \(daysLeft) days (Upcoming Horizon).", isImmediate: false)
         }
+    }
+
+    // MARK: - Task Model Materialization
+
+    /// Materializes the draft into a persistent TaskItem, resolving due dates and timestamps via domain rules.
+    public func toTaskItem(existing: TaskItem?, clock: Clock) -> TaskItem? {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !cleanTitle.isEmpty, !cleanTag.isEmpty else { return nil }
+
+        let recurrence: RecurrenceRule? = isOneTime
+            ? nil
+            : RecurrenceRule(count: repeatCount, unit: repeatUnit)
+
+        let resolvedDueDate: Date
+        if !isNew,
+           let existing = existing,
+           existing.dueDate == targetDueDate && existing.recurrence == recurrence && existing.healthState(using: clock) == initialHealthState {
+            resolvedDueDate = existing.dueDate
+        } else if !isNew,
+                  let existing = existing,
+                  existing.healthState(using: clock) != initialHealthState && targetDueDate == existing.dueDate {
+            resolvedDueDate = ChoreEngine.calculateDueDate(
+                health: initialHealthState,
+                recurrence: recurrence,
+                isOneTime: isOneTime,
+                repeatCount: repeatCount,
+                repeatUnit: repeatUnit,
+                clock: clock
+            )
+        } else {
+            resolvedDueDate = targetDueDate
+        }
+
+        let resolvedCreatedAt: Date
+        if isNew {
+            resolvedCreatedAt = clock.now
+        } else if let existing = existing {
+            resolvedCreatedAt = existing.createdAt
+        } else {
+            resolvedCreatedAt = createdAt ?? clock.now
+        }
+
+        return TaskItem(
+            id: id,
+            title: cleanTitle,
+            tag: cleanTag,
+            durationMinutes: durationMinutes,
+            isCompleted: isCompleted,
+            dueDate: resolvedDueDate,
+            lastCompletedAt: lastCompletedAt,
+            recurrence: recurrence,
+            createdAt: resolvedCreatedAt
+        )
     }
 }

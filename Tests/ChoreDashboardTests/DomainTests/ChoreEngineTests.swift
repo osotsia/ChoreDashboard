@@ -369,4 +369,30 @@ struct ChoreEngineTests {
         #expect(ChoreEngine.healthState(for: 0.0, isOverdue: false) == .due)
         #expect(ChoreEngine.healthState(for: 0.9, isOverdue: true) == .overdue)
     }
+
+    @Test("estimatedDaysRemaining computes expected thresholds across all health states")
+    func testEstimatedDaysRemaining() {
+        #expect(ChoreEngine.estimatedDaysRemaining(health: .overdue, intervalDays: 30) == -1)
+        #expect(ChoreEngine.estimatedDaysRemaining(health: .due, intervalDays: 30) == 0)
+        #expect(ChoreEngine.estimatedDaysRemaining(health: .halfway, intervalDays: 30) == 15)
+        #expect(ChoreEngine.estimatedDaysRemaining(health: .notYet, intervalDays: 30) == 23)
+        #expect(ChoreEngine.estimatedDaysRemaining(health: .good, intervalDays: 30) == 30)
+    }
+
+    @Test("resolveRunway returns synchronized dueDate, health state, and clamped ratio")
+    func testResolveRunway() {
+        let clock = makeClock(year: 2026, month: 5, day: 10)
+        let resolved = ChoreEngine.resolveRunway(
+            ratio: 0.5,
+            isOverdue: false,
+            isOneTime: false,
+            repeatCount: 20,
+            repeatUnit: .day,
+            clock: clock
+        )
+        #expect(resolved.health == .halfway)
+        #expect(resolved.ratio == 0.5)
+        let diff = clock.calendar.dateComponents([.day], from: clock.now, to: resolved.dueDate).day
+        #expect(diff == 10)
+    }
 }

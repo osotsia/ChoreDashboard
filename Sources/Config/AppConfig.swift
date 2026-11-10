@@ -4,7 +4,7 @@ import SwiftUI
 public enum AppConfig {
     // MARK: - Window Dimensions & Layout
     public static let baseWidth: CGFloat = 1100
-    public static let baseHeight: CGFloat = 850
+    public static let baseHeight: CGFloat = 750
     public static let splitRatio: CGFloat = 0.65 // Left = 65%, Right = 35%
     
     /// Top padding inset applied to views bordering the top window chrome

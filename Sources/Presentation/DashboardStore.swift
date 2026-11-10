@@ -144,54 +144,8 @@ public final class DashboardStore {
 
     public func commitDraft() {
         guard let draft = taskDraft else { return }
-        let cleanTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanTag = draft.tag.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        guard !cleanTitle.isEmpty, !cleanTag.isEmpty else { return }
-
-        let recurrence: RecurrenceRule? = draft.isOneTime
-            ? nil
-            : RecurrenceRule(count: draft.repeatCount, unit: draft.repeatUnit)
-
-        let resolvedDueDate: Date
-        if !draft.isNew,
-           let existing = state.tasks.first(where: { $0.id == draft.id }),
-           existing.dueDate == draft.targetDueDate && existing.recurrence == recurrence && existing.healthState(using: clock) == draft.initialHealthState {
-            resolvedDueDate = existing.dueDate
-        } else if !draft.isNew,
-                  let existing = state.tasks.first(where: { $0.id == draft.id }),
-                  existing.healthState(using: clock) != draft.initialHealthState && draft.targetDueDate == existing.dueDate {
-            resolvedDueDate = ChoreEngine.calculateDueDate(
-                health: draft.initialHealthState,
-                recurrence: recurrence,
-                isOneTime: draft.isOneTime,
-                repeatCount: draft.repeatCount,
-                repeatUnit: draft.repeatUnit,
-                clock: clock
-            )
-        } else {
-            resolvedDueDate = draft.targetDueDate
-        }
-
-        let resolvedCreatedAt: Date
-        if draft.isNew {
-            resolvedCreatedAt = clock.now
-        } else if let existing = state.tasks.first(where: { $0.id == draft.id }) {
-            resolvedCreatedAt = existing.createdAt
-        } else {
-            resolvedCreatedAt = draft.createdAt ?? clock.now
-        }
-
-        let task = TaskItem(
-            id: draft.id,
-            title: cleanTitle,
-            tag: cleanTag,
-            durationMinutes: draft.durationMinutes,
-            isCompleted: draft.isCompleted,
-            dueDate: resolvedDueDate,
-            lastCompletedAt: draft.lastCompletedAt,
-            recurrence: recurrence,
-            createdAt: resolvedCreatedAt
-        )
+        let existing = state.tasks.first(where: { $0.id == draft.id })
+        guard let task = draft.toTaskItem(existing: existing, clock: clock) else { return }
 
         ChoreEngine.upsertTask(state: &state, task: task)
         dismissDraft()
